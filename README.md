@@ -58,12 +58,93 @@ uv pip install -r requirements.txt
 
 ## 🚀 Cách chạy Bot
 
+### Chạy trực tiếp (Local)
+
 Khởi chạy ứng dụng bằng lệnh `uv`:
 ```bash
 uv run python -m app.main
 ```
 
 Bot sẽ tự động tải các biến môi trường từ file `.env` và đăng nhập vào tài khoản cá nhân của bạn.
+
+---
+
+## 🐳 Deploy bằng Docker
+
+> [!TIP]
+> Khuyến nghị dùng Docker để chạy bot liên tục trên server/VPS mà không cần cài Python hay FFmpeg thủ công.
+
+### Yêu cầu
+
+- **Docker** đã được cài đặt ([hướng dẫn cài đặt](https://docs.docker.com/get-docker/))
+
+### 1. Chuẩn bị file `.env`
+
+Tạo file `.env` ở thư mục gốc (xem hướng dẫn bên trên):
+```env
+DISCORD_TOKEN=your_discord_user_token_here
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+> [!CAUTION]
+> Không bao giờ commit file `.env` lên Git. File `.gitignore` đã được cấu hình để bỏ qua nó.
+
+### 2. Build image
+
+```bash
+docker build -t discord-summarizer-bot .
+```
+
+### 3. Chạy container
+
+```bash
+docker run -d \
+  --name discord-bot \
+  --env-file .env \
+  --restart unless-stopped \
+  discord-summarizer-bot
+```
+
+| Flag | Ý nghĩa |
+|---|---|
+| `-d` | Chạy nền (detached mode) |
+| `--name discord-bot` | Đặt tên container để dễ quản lý |
+| `--env-file .env` | Nạp biến môi trường từ file `.env` |
+| `--restart unless-stopped` | Tự restart nếu bot crash, trừ khi dừng thủ công |
+
+### 4. Quản lý container
+
+```bash
+# Xem log (theo dõi realtime)
+docker logs -f discord-bot
+
+# Xem log 50 dòng gần nhất
+docker logs discord-bot --tail 50
+
+# Dừng bot
+docker stop discord-bot
+
+# Khởi động lại bot
+docker restart discord-bot
+
+# Xóa container (cần dừng trước)
+docker rm discord-bot
+```
+
+### 5. Cập nhật bot (khi có thay đổi code)
+
+```bash
+# Build lại image với code mới
+docker build -t discord-summarizer-bot .
+
+# Xóa container cũ và chạy lại
+docker rm -f discord-bot
+docker run -d \
+  --name discord-bot \
+  --env-file .env \
+  --restart unless-stopped \
+  discord-summarizer-bot
+```
 
 ---
 

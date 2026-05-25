@@ -5,8 +5,7 @@ from app.services.prompt import build_summary_prompt
 
 log = logging.getLogger("bot.summarize")
 
-# Giới hạn ký tự tối đa của prompt (~200k token cho Gemini Flash)
-MAX_PROMPT_CHARS = 800_000
+MAX_PROMPT_CHARS = 1_200_000
 
 
 class SummarizeService:
