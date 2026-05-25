@@ -1,7 +1,7 @@
 # Discord Group Chat Summarizer & Music Self-Bot
 
 Dự án này là một Discord Self-bot (chạy dưới danh nghĩa tài khoản cá nhân) giúp thực hiện 2 tính năng chính trong Nhóm chat riêng tư (Group Chat / Group DM):
-1. **Tóm tắt nội dung chat:** Thu thập $N$ tin nhắn gần nhất hoặc tin nhắn trong $N$ phút trước đó, gửi qua Gemini API để dịch và tóm tắt ngắn gọn bằng tiếng Việt.
+1. **Tóm tắt nội dung chat:** Thu thập $N$ tin nhắn gần nhất hoặc tin nhắn trong $N$ giờ trước đó, gửi qua Gemini API để dịch và tóm tắt ngắn gọn bằng tiếng Việt.
 2. **Phát nhạc YouTube:** Tải luồng âm thanh từ YouTube thông qua `yt-dlp` và stream trực tiếp vào cuộc gọi thoại (Voice Call) của nhóm chat sử dụng `FFmpeg`.
 
 ---
@@ -37,6 +37,7 @@ Sao chép hoặc chỉnh sửa file `.env` ở thư mục gốc của dự án:
 ```env
 DISCORD_TOKEN=your_discord_user_token_here
 GEMINI_API_KEY=your_gemini_api_key_here
+# CHANNEL_ID=your_target_channel_id_here  # (Tùy chọn)
 ```
 
 > [!IMPORTANT]
@@ -47,6 +48,10 @@ GEMINI_API_KEY=your_gemini_api_key_here
 > 4. Tìm các request có tên bắt đầu bằng `messages` hoặc `science`.
 > 5. Xem phần **Request Headers**, sao chép giá trị của trường **`Authorization`** (Đây chính là User Token của bạn, có dạng một chuỗi ký tự dài không bắt đầu bằng "Bot ").
 > 6. Dán token này vào biến `DISCORD_TOKEN` trong `.env`.
+
+> [!TIP]
+> **Cách cấu hình lọc kênh bằng CHANNEL_ID (Tùy chọn):**
+> Nếu muốn bot chỉ nhận và thực hiện lệnh trong một Group DM hoặc kênh chat cụ thể, bạn hãy thêm dòng `CHANNEL_ID=ID_KÊNH_CỦA_BẠN` vào file `.env`. Nếu không cấu hình biến này, bot sẽ phản hồi lệnh từ mọi kênh chat mà bạn tham gia.
 
 ### 2. Cài đặt các thư viện
 Sử dụng `uv` để đồng bộ và cài đặt toàn bộ dependencies trong file `requirements.txt`:
@@ -153,8 +158,8 @@ docker run -d \
 Tất cả thành viên trong Group DM đều có thể sử dụng các lệnh sau:
 
 ### 💬 Lệnh tóm tắt tin nhắn (Text)
-*   `.tomtat <limit>` (hoặc `.sum_msgs`): Tóm tắt $N$ tin nhắn gần nhất trong group chat (Mặc định là 50 tin nhắn nếu không nhập số).
-*   `.tomtat_time <minutes>` (hoặc `.sum_time`): Tóm tắt toàn bộ tin nhắn chat phát sinh trong $N$ phút trước đó (Mặc định là 30 phút).
+*   `.tomtat <limit>` (hoặc `.sum_msgs`): Tóm tắt $N$ tin nhắn gần nhất trong group chat (Mặc định là 50 tin nhắn nếu không nhập số, tối đa 500 tin nhắn).
+*   `.tomtat_time <hours>` (hoặc `.sum_time`): Tóm tắt toàn bộ tin nhắn chat phát sinh trong $N$ giờ trước đó (Mặc định là 1 giờ, tối đa 12 giờ, tổng hợp tối đa 500 tin nhắn).
 
 ### 🎶 Lệnh phát nhạc (Voice call)
 *   `.join`: Yêu cầu bot tham gia vào cuộc gọi thoại đang diễn ra của nhóm chat.

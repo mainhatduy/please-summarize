@@ -40,16 +40,89 @@ _channel_last_fetch: dict[int, float] = {}
 _SEND_JITTER_MIN = 0.3                # delay ngẫu nhiên tối thiểu giữa các chunk (s)
 _SEND_JITTER_MAX = 0.8                # delay ngẫu nhiên tối đa giữa các chunk (s)
 
+# Theo dõi thời gian bot ở một mình trong voice: {channel_id: alone_since_timestamp}
+_alone_since: dict[int, float] = {}
+_alone_checker_started = False
+
+
+def get_connected_members(voice_client) -> list:
+    """Trả về danh sách các thành viên đang kết nối trong cuộc gọi thoại."""
+    channel = voice_client.channel
+    if isinstance(channel, (discord.GroupChannel, discord.DMChannel)):
+        connected = []
+        # Kiểm tra bot của mình
+        if channel.me and channel.me.voice and channel.me.voice.channel == channel:
+            connected.append(channel.me)
+
+        # Kiểm tra các thành viên khác
+        if isinstance(channel, discord.GroupChannel):
+            for user in channel.recipients:
+                if user.voice and user.voice.channel == channel:
+                    connected.append(user)
+        elif isinstance(channel, discord.DMChannel):
+            user = channel.recipient
+            if user and user.voice and user.voice.channel == channel:
+                connected.append(user)
+        return connected
+    else:
+        # Kênh thoại Server (Guild VoiceChannel)
+        if hasattr(channel, "members"):
+            return channel.members
+        return []
+
+
+async def check_alone_voice_clients():
+    """Tác vụ nền tự động rời voice nếu bot ở một mình quá 5 giây."""
+    while not bot.is_closed():
+        try:
+            for voice_client in list(bot.voice_clients):
+                if not voice_client.is_connected():
+                    _alone_since.pop(voice_client.channel.id, None)
+                    continue
+
+                members = get_connected_members(voice_client)
+
+                # Lọc ra các user thực sự khác ngoài bot
+                active_users = [m for m in members if not m.bot and m.id != bot.user.id]
+
+                if len(active_users) == 0:
+                    # Không còn người dùng nào khác trong cuộc gọi thoại
+                    if voice_client.channel.id not in _alone_since:
+                        _alone_since[voice_client.channel.id] = time.monotonic()
+                        log.info(f"[voice_alone] Bot ở một mình trong kênh {voice_client.channel.id}. Bắt đầu đếm ngược 5s...")
+                    else:
+                        elapsed = time.monotonic() - _alone_since[voice_client.channel.id]
+                        if elapsed >= 5.0:
+                            log.info(f"[voice_alone] Đã ở một mình quá 5s tại kênh {voice_client.channel.id}. Tự động rời voice.")
+                            await voice_client.disconnect()
+                            _alone_since.pop(voice_client.channel.id, None)
+                else:
+                    # Có người dùng khác trong cuộc gọi, reset bộ đếm thời gian
+                    if voice_client.channel.id in _alone_since:
+                        log.info(f"[voice_alone] Có người tham gia lại kênh {voice_client.channel.id}. Hủy đếm ngược.")
+                        _alone_since.pop(voice_client.channel.id, None)
+        except Exception as e:
+            log.error(f"Lỗi trong tác vụ check_alone_voice_clients: {e}", exc_info=True)
+        await asyncio.sleep(1.0)
+
 
 @bot.event
 async def on_ready():
+    global _alone_checker_started
     log.info(f"Đã đăng nhập thành công với tài khoản: {bot.user} (ID: {bot.user.id})")
+    if not _alone_checker_started:
+        bot.loop.create_task(check_alone_voice_clients())
+        _alone_checker_started = True
 
 
 @bot.event
 async def on_message(message):
     # Bỏ qua tin nhắn từ bot thực sự
     if message.author.bot:
+        return
+
+    # Nếu cấu hình CHANNEL_ID, chỉ nhận request từ channel đó
+    if Config.CHANNEL_ID is not None and message.channel.id != Config.CHANNEL_ID:
         return
 
     content = message.content
@@ -159,8 +232,8 @@ async def help_cmd(ctx):
     """Lệnh: .help – Hiển thị danh sách lệnh"""
     await ctx.send(
         "**📋 Danh sách lệnh:**\n"
-        "`.tomtat [n]` – Tóm tắt n tin nhắn gần nhất (mặc định 300, tối đa 300)\n"
-        "`.tomtat_time [phút]` – Tóm tắt tin nhắn trong n phút qua (mặc định 30, tối đa 1440)\n"
+        "`.tomtat [n]` – Tóm tắt n tin nhắn gần nhất (mặc định 50, tối đa 500)\n"
+        "`.tomtat_time [giờ]` – Tóm tắt tin nhắn trong n giờ qua (mặc định 1, tối đa 12)\n"
         "`.play <tên bài/link YouTube>` – Phát nhạc trong voice\n"
         "`.join` – Tham gia cuộc gọi thoại\n"
         "`.leave` / `.stop` – Rời cuộc gọi thoại\n"
@@ -174,8 +247,8 @@ async def help_cmd(ctx):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @bot.command(name="tomtat", aliases=["sum_msgs"])
-async def tomtat(ctx, n: int = 300):
-    """Lệnh: .tomtat <n> – Tóm tắt n tin nhắn gần nhất (mặc định 300)"""
+async def tomtat(ctx, n: int = 50):
+    """Lệnh: .tomtat <n> – Tóm tắt n tin nhắn gần nhất (mặc định 50)"""
     log.info(f"[tomtat] Yêu cầu tóm tắt {n} tin nhắn | channel_id={ctx.channel.id}")
 
     # Kiểm tra cooldown
@@ -184,9 +257,9 @@ async def tomtat(ctx, n: int = 300):
         await ctx.send(f"⏳ Bạn cần chờ **{remaining:.0f} giây** nữa để dùng lệnh này.")
         return
 
-    if n <= 0 or n > 300:
+    if n <= 0 or n > 500:
         log.warning(f"[tomtat] Giá trị n={n} không hợp lệ")
-        await ctx.send("Vui lòng nhập n từ 1 đến 300.")
+        await ctx.send("Vui lòng nhập n từ 1 đến 500.")
         return
 
     await _apply_channel_rate_limit(ctx.channel.id)
@@ -236,9 +309,9 @@ async def tomtat(ctx, n: int = 300):
 
 
 @bot.command(name="tomtat_time", aliases=["sum_time"])
-async def tomtat_time(ctx, minutes: int = 30):
-    """Lệnh: .tomtat_time <minutes> – Tóm tắt tin nhắn trong n phút trước (mặc định 30)"""
-    log.info(f"[tomtat_time] Yêu cầu tóm tắt {minutes} phút | channel_id={ctx.channel.id}")
+async def tomtat_time(ctx, hours: float = 1.0):
+    """Lệnh: .tomtat_time <hours> – Tóm tắt tin nhắn trong n giờ trước (mặc định 1)"""
+    log.info(f"[tomtat_time] Yêu cầu tóm tắt {hours} giờ | channel_id={ctx.channel.id}")
 
     # Kiểm tra cooldown
     remaining = _check_cooldown(ctx.author.id)
@@ -246,21 +319,20 @@ async def tomtat_time(ctx, minutes: int = 30):
         await ctx.send(f"⏳ Bạn cần chờ **{remaining:.0f} giây** nữa để dùng lệnh này.")
         return
 
-    if minutes <= 0 or minutes > 1440:
-        log.warning(f"[tomtat_time] Giá trị minutes={minutes} không hợp lệ")
-        await ctx.send("Vui lòng nhập số phút hợp lệ (1-1440).")
+    if hours <= 0 or hours > 12:
+        log.warning(f"[tomtat_time] Giá trị hours={hours} không hợp lệ")
+        await ctx.send("Vui lòng nhập số giờ hợp lệ (từ 0.1 đến 12).")
         return
 
-    after_time = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+    after_time = datetime.now(timezone.utc) - timedelta(hours=hours)
     await _apply_channel_rate_limit(ctx.channel.id)
     log.debug(f"[tomtat_time] Lấy tin nhắn sau: {after_time.isoformat()}")
 
     messages = []
     skipped = 0
     skipped_bots = 0
-    # limit=None để không bỏ sót tin nhắn trong giờ cao điểm,
-    # chỉ giới hạn bởi khoảng thời gian after=
-    async for msg in ctx.channel.history(limit=None, after=after_time):
+    # Lấy lịch sử tin nhắn từ mới nhất về cũ nhất
+    async for msg in ctx.channel.history(limit=None):
         if msg.id == ctx.message.id:
             continue
         # Bỏ qua tin nhắn từ bot thực sự HOẶC từ chính self-bot này
@@ -268,6 +340,9 @@ async def tomtat_time(ctx, minutes: int = 30):
             log.debug(f"[tomtat_time] Bỏ qua tin nhắn từ bot/self: {msg.author.name}")
             skipped_bots += 1
             continue
+        # Nếu gặp tin nhắn có thời gian cũ hơn after_time, dừng lại
+        if msg.created_at < after_time:
+            break
         # Bỏ qua tin nhắn chỉ có ảnh/file (không có nội dung text)
         if not msg.content.strip():
             log.debug(f"[tomtat_time] Bỏ qua tin nhắn không có text từ {msg.author.name}")
@@ -279,18 +354,23 @@ async def tomtat_time(ctx, minutes: int = 30):
             skipped += 1
             continue
         messages.append(f"{msg.author.name}: {msg.content}")
+        # Giới hạn tối đa 500 cuộc trò chuyện
+        if len(messages) >= 500:
+            break
 
     if not messages:
         log.info("[tomtat_time] Không có tin nhắn nào trong khoảng thời gian này.")
         await ctx.send("Không có đoạn hội thoại nào trong thời gian này.")
         return
 
+    # Đảo ngược thứ tự để có thứ tự thời gian tăng dần (cũ đến mới) trước khi gửi cho Gemini
+    messages.reverse()
     collected = len(messages)
     log.info(f"[tomtat_time] Đã thu thập được {collected} tin nhắn text – đang gọi Gemini API...")
 
     # Hiển thị metadata trước khi gọi Gemini
     await ctx.send(
-        f"📊 Thu thập được **{collected}** tin nhắn text trong {minutes} phút qua"
+        f"📊 Thu thập được **{collected}** tin nhắn text trong {hours} giờ qua"
         + (f" (bỏ qua {skipped} ảnh/file)" if skipped else "")
         + (f" (bỏ qua {skipped_bots} tin nhắn bot)" if skipped_bots else "")
         + "\nĐang gọi Gemini..."
@@ -318,7 +398,10 @@ async def join(ctx):
         return
 
     try:
-        await ctx.channel.connect()
+        if isinstance(ctx.channel, (discord.GroupChannel, discord.DMChannel)):
+            await ctx.channel.connect(ring=False)
+        else:
+            await ctx.channel.connect()
         log.info("[join] Đã kết nối vào cuộc gọi thoại thành công.")
         await ctx.send("Đã kết nối vào cuộc gọi thoại.")
     except Exception as e:
@@ -352,7 +435,10 @@ async def play(ctx, *, query: str):
     if not voice_client or not voice_client.is_connected():
         log.debug("[play] Chưa kết nối voice – đang tham gia...")
         try:
-            voice_client = await ctx.channel.connect()
+            if isinstance(ctx.channel, (discord.GroupChannel, discord.DMChannel)):
+                voice_client = await ctx.channel.connect(ring=False)
+            else:
+                voice_client = await ctx.channel.connect()
             log.info("[play] Đã kết nối voice thành công.")
         except Exception as e:
             log.error(f"[play] Không thể kết nối voice: {e}", exc_info=True)
