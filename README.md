@@ -165,3 +165,10 @@ Tất cả thành viên trong Group DM đều có thể sử dụng các lệnh 
 *   `.join`: Yêu cầu bot tham gia vào cuộc gọi thoại đang diễn ra của nhóm chat.
 *   `.play <tên bài hát hoặc link YouTube>`: Yêu cầu bot tham gia cuộc gọi (nếu chưa vào) và phát nhạc từ YouTube (hỗ trợ tìm kiếm theo tên hoặc nhận diện link trực tiếp).
 *   `.leave` (hoặc `.stop`): Dừng phát nhạc và ngắt kết nối bot khỏi cuộc gọi thoại.
+
+
+```bash
+docker build -t discord-summarizer-bot .
+docker rm -f discord-bot
+docker run -d --name discord-bot --env-file .env --restart unless-stopped discord-summarizer-bot
+```

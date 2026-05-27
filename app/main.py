@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, timezone
 from app.core.config import Config
 from app.services.summarize import SummarizeService
 from app.services.music import MusicService
+from app.services.fortune import FortuneService
+from app.services.taixiu import TaiXiuService
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -26,6 +28,8 @@ for _lib in ("discord", "discord.http", "discord.gateway", "discord.client", "ht
 bot = commands.Bot(command_prefix=".", self_bot=True, help_command=None)
 summarize_service = SummarizeService()
 music_service = MusicService()
+fortune_service = FortuneService()
+taixiu_service = TaiXiuService()
 
 # Cooldown tracker: {user_id: last_used_timestamp}
 _COOLDOWN_SECONDS = 60
@@ -234,6 +238,8 @@ async def help_cmd(ctx):
         "**📋 Danh sách lệnh:**\n"
         "`.tomtat [n]` – Tóm tắt n tin nhắn gần nhất (mặc định 50, tối đa 500)\n"
         "`.tomtat_time [giờ]` – Tóm tắt tin nhắn trong n giờ qua (mặc định 1, tối đa 12)\n"
+        "`.get_luck` – Roll vận may hôm nay (1 lần/ngày, reset 00:00)\n"
+        "`.taixiu` (hoặc `.tx`) – Chơi Tài Xỉu 3 xúc xắc (kèm chẵn lẻ)\n"
         "`.play <tên bài/link YouTube>` – Phát nhạc trong voice\n"
         "`.join` – Tham gia cuộc gọi thoại\n"
         "`.leave` / `.stop` – Rời cuộc gọi thoại\n"
@@ -381,6 +387,93 @@ async def tomtat_time(ctx, hours: float = 1.0):
     log.info(f"[tomtat_time] Gemini trả về kết quả ({len(summary)} ký tự) – đang gửi...")
     await send_long(ctx, f"**Tóm tắt:**\n{summary}")
     log.info("[tomtat_time] Hoàn thành.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RANDOM VẬN MAY – GET LUCK
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bot.command(name="get_luck", aliases=["luck", "vanmay"])
+async def get_luck(ctx):
+    """Lệnh: .get_luck – Roll vận may hôm nay (1 lần/ngày, reset 00:00)"""
+    log.info(f"[get_luck] Yêu cầu roll vận may | author={ctx.author} | channel_id={ctx.channel.id}")
+
+    # Fetch tối đa 77 tin nhắn của chính user gọi lệnh trong kênh
+    await _apply_channel_rate_limit(ctx.channel.id)
+    user_messages: list[str] = []
+    async for msg in ctx.channel.history(limit=500):
+        if msg.id == ctx.message.id:
+            continue
+        if msg.author.id != ctx.author.id:
+            continue
+        if not msg.content.strip() or msg.content.strip().startswith(bot.command_prefix):
+            continue
+        user_messages.append(msg.content.strip())
+        if len(user_messages) >= 77:
+            break
+
+    user_messages.reverse()  # cũ → mới
+    log.info(f"[get_luck] Thu thập {len(user_messages)} tin nhắn của {ctx.author} để gửi Gemini.")
+
+    result = fortune_service.roll(ctx.author.id, messages=user_messages)
+
+    if result.already_rolled:
+        log.info(f"[get_luck] User {ctx.author} đã roll hôm nay rồi.")
+        await ctx.send(
+            f"🎲 **{ctx.author.name}**, bạn đã roll vận may hôm nay rồi!\n"
+            "Hãy quay lại vào **00:00 ngày mai** để thử lại nhé. 🌙"
+        )
+        return
+
+    tier = result.tier
+    embed_data = fortune_service.get_embed(result, ctx.author.name)
+    embed = discord.Embed(**embed_data)
+    embed.add_field(
+        name="📊 Tỷ lệ xuất hiện",
+        value=f"`{tier.weight}%` – {'Cực hiếm! 🔥' if tier.weight <= 5 else 'Hiếm! ✨' if tier.weight <= 14 else 'Thường gặp'}",
+        inline=False,
+    )
+    embed.set_footer(text="Roll lại vào ngày mai | Chúc bạn một ngày tốt lành! 🍀")
+
+    log.info(f"[get_luck] {ctx.author} rolled Tier {tier.name} – {result.animal}")
+
+    # Discord self-bot không dùng send(embed=...) được trực tiếp như bot thường,
+    # nên gửi dạng text đẹp thay thế
+    tier_bar = {
+        "SSS": "🟡🟡🟡🟡🟡",
+        "S":   "🟠🟠🟠🟠⬜",
+        "A":   "🟢🟢🟢⬜⬜",
+        "B":   "🔵🔵⬜⬜⬜",
+        "C":   "🔴🔴⬜⬜⬜",
+        "D":   "⚫⬜⬜⬜⬜",
+    }
+    bar = tier_bar.get(tier.name, "")
+
+    text = (
+        f"`{ctx.author.name}`\n"
+        f"# **{tier.label}**\n"
+        f"## **{result.animal}**\n"
+        f"\n"
+        f"{result.fortune_msg}\n"
+    )
+    await ctx.send(text)
+    log.info("[get_luck] Hoàn thành.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GAME TÀI XỈU - TAI XIU
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bot.command(name="taixiu", aliases=["tx"])
+async def taixiu(ctx):
+    """Lệnh: .taixiu – Chơi Tài Xỉu 3 xúc xắc ngẫu nhiên"""
+    log.info(f"[taixiu] Yêu cầu chơi Tài Xỉu | author={ctx.author} | channel_id={ctx.channel.id}")
+    
+    result = taixiu_service.roll()
+    text = taixiu_service.get_result_text(ctx.author.name, result)
+    
+    await ctx.send(text)
+    log.info(f"[taixiu] Hoàn thành roll cho {ctx.author.name}: {result['rolls']} -> {result['result_type']}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
