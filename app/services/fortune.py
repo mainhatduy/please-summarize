@@ -8,12 +8,14 @@ dựa trên 77 tin nhắn gần nhất của user trong kênh.
 
 import logging
 import random
+import os
+import json
 from google import genai
 from app.core.config import Config
 
 log = logging.getLogger("bot.fortune")
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 
 # ── Cấu hình Tier ─────────────────────────────────────────────────────────────
@@ -138,8 +140,32 @@ TIERS: list[Tier] = [
 _TIER_WEIGHTS = [t.weight for t in TIERS]
 
 
-# ── Cooldown tracker: {user_id: date đã roll} ─────────────────────────────────
-_fortune_cooldown: dict[int, date] = {}
+# ── Cooldown tracker (JSON File Persistence) ──────────────────────────────────
+HISTORY_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "database",
+    "fortune_history.json"
+)
+
+
+def load_history() -> dict[str, str]:
+    if not os.path.exists(HISTORY_FILE):
+        return {}
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        log.error(f"[fortune] Lỗi khi load history file: {e}")
+        return {}
+
+
+def save_history(history: dict[str, str]):
+    try:
+        os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        log.error(f"[fortune] Lỗi khi save history file: {e}")
 
 
 @dataclass
@@ -194,15 +220,24 @@ class FortuneService:
                       Nếu None/rỗng, dùng fortune_msg mặc định của Tier.
         """
         today = date.today()
-        if _fortune_cooldown.get(user_id) == today:
-            return FortuneResult(tier=None, animal="", already_rolled=True)  # type: ignore[arg-type]
+        history = load_history()
+        user_key = str(user_id)
+
+        if user_key in history:
+            try:
+                last_roll_dt = datetime.fromisoformat(history[user_key])
+                if last_roll_dt.date() == today:
+                    return FortuneResult(tier=None, animal="", already_rolled=True)  # type: ignore[arg-type]
+            except Exception as e:
+                log.error(f"[fortune] Lỗi khi parse thời gian roll cũ của user {user_id}: {e}")
 
         secure_random = random.SystemRandom()
         tier: Tier = secure_random.choices(TIERS, weights=_TIER_WEIGHTS, k=1)[0]
         animal: str = secure_random.choice(tier.animals)
         fortune_msg = self.generate_fortune_msg(tier, animal, messages or [])
 
-        _fortune_cooldown[user_id] = today
+        history[user_key] = datetime.now().isoformat()
+        save_history(history)
         return FortuneResult(tier=tier, animal=animal, fortune_msg=fortune_msg, already_rolled=False)
 
     def get_embed(self, result: FortuneResult, author_name: str) -> dict:

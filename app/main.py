@@ -10,6 +10,7 @@ from app.services.summarize import SummarizeService
 from app.services.music import MusicService
 from app.services.fortune import FortuneService
 from app.services.taixiu import TaiXiuService
+from app.services.xinkeo import XinKeoService
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -30,6 +31,7 @@ summarize_service = SummarizeService()
 music_service = MusicService()
 fortune_service = FortuneService()
 taixiu_service = TaiXiuService()
+xinkeo_service = XinKeoService()
 
 # Cooldown tracker: {user_id: last_used_timestamp}
 _COOLDOWN_SECONDS = 60
@@ -240,6 +242,7 @@ async def help_cmd(ctx):
         "`.tomtat_time [giờ]` – Tóm tắt tin nhắn trong n giờ qua (mặc định 1, tối đa 12)\n"
         "`.get_luck` – Roll vận may hôm nay (1 lần/ngày, reset 00:00)\n"
         "`.taixiu` (hoặc `.tx`) – Chơi Tài Xỉu 3 xúc xắc (kèm chẵn lẻ)\n"
+        "`.xinkeo <lời khấn>` (hoặc `.xk`) – Xin keo truyền thống\n"
         "`.play <tên bài/link YouTube>` – Phát nhạc trong voice\n"
         "`.join` – Tham gia cuộc gọi thoại\n"
         "`.leave` / `.stop` – Rời cuộc gọi thoại\n"
@@ -474,6 +477,46 @@ async def taixiu(ctx):
     
     await ctx.send(text)
     log.info(f"[taixiu] Hoàn thành roll cho {ctx.author.name}: {result['rolls']} -> {result['result_type']}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# XIN KEO TRUYỀN THỐNG - XIN KEO
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bot.command(name="xinkeo", aliases=["xk"])
+async def xinkeo(ctx, *, wish: str = ""):
+    """Lệnh: .xinkeo <lời khấn> – Mô phỏng nghi lễ xin keo truyền thống"""
+    log.info(f"[xinkeo] Yêu cầu xin keo | author={ctx.author} | wish='{wish}' | channel_id={ctx.channel.id}")
+    if not wish.strip():
+        await ctx.send("🙏 Vui lòng nhập lời khấn nguyện. Ví dụ: `.xinkeo Con xin sức khỏe bình an.`")
+        return
+
+    # Sinh kết quả gieo keo
+    roll_result = xinkeo_service.roll()
+    
+    wait_msg = await ctx.send(
+        f"⚪ ⚫ **{ctx.author.name}** đang thành tâm dâng hương khấn nguyện:\n"
+        f"*\"{wish}\"*\n\n"
+        f"*Đang gieo quẻ xin keo...*"
+    )
+
+    loop = asyncio.get_event_loop()
+    luan_giai = await loop.run_in_executor(None, xinkeo_service.generate_luan_giai, wish, roll_result)
+
+    result_type = roll_result["result"]
+    icon1 = roll_result["icon1"]
+    icon2 = roll_result["icon2"]
+    
+    result_text = (
+        f"🙏 **Quẻ Xin Keo**\n"
+        f"**Người cầu:** {ctx.author.name}\n"
+        f"**Tâm nguyện:** *\"{wish}\"*\n"
+        f"**Quẻ gieo:** {icon1} {icon2} ({result_type})\n\n"
+        f"**Lời luận giải:**\n{luan_giai}"
+    )
+    
+    await wait_msg.edit(content=result_text)
+    log.info(f"[xinkeo] Hoàn thành gieo keo cho {ctx.author.name}: {result_type}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
