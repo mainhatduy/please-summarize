@@ -63,7 +63,7 @@ class TaiXiuService:
             result_type_str = f"**{result['result_type']}**"
 
         text = (
-            f"# `{dice_str}`\n"
+            f"# {dice_str}\n"
             f"Tổng điểm: **{result['total']}**\n"
             f"Kết quả: {result_type_str}\n"
             f"Chẵn/Lẻ: **{result['even_odd']}**"
