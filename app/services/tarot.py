@@ -76,15 +76,33 @@ class TarotService:
         
         prompt = (
             f"Người dùng hỏi: '{question}'\n"
-            f"Lá chính: {key_str} | 3 lá phụ: {supp_str}\n\n"
-            f"Yêu cầu luận giải cực kỳ ngắn gọn. KHÔNG chào hỏi, KHÔNG viết dòng thừa, ĐI THẲNG vào vấn đề theo ĐÚNG form sau:\n\n"
-            f"**Tổng quan:** (1-2 câu tóm tắt nhanh tình hình)\n\n"
+            f"Lá chính: {key_str}\n"
+            f"3 lá phụ: {supp_str}\n\n"
+
+            f"Bạn là chuyên gia Tarot. Hãy luận giải dựa trên ý nghĩa truyền thống của Tarot và bối cảnh câu hỏi.\n\n"
+
+            f"Nguyên tắc:\n"
+            f"- Lá chính là năng lượng/trọng tâm cốt lõi của trải bài.\n"
+            f"- Các lá phụ dùng để giải thích, bổ sung, hỗ trợ hoặc cảnh báo cho lá chính.\n"
+            f"- Không giải nghĩa từng lá một cách tách biệt; phải liên kết các lá thành một câu chuyện thống nhất.\n"
+            f"- Ưu tiên trả lời đúng trọng tâm câu hỏi của người dùng.\n"
+            f"- Nêu cả mặt tích cực và thách thức nếu có.\n"
+            f"- Văn phong súc tích nhưng có chiều sâu.\n"
+            f"- Không mê tín tuyệt đối, trình bày như một góc nhìn tham khảo.\n\n"
+
+            f"Yêu cầu trả lời cực kỳ ngắn gọn theo đúng định dạng:\n\n"
+
+            f"**Tổng quan:**\n"
+            f"(1-2 câu tóm tắt tình hình, kết luận chính từ toàn bộ trải bài)\n\n"
+
             f"**Phân tích:**\n"
-            f"- **{key_card.name}**: (Ý nghĩa ngắn gọn của lá chính)\n"
-            f"- **{supp_cards[0].name}**: (Ý nghĩa ngắn gọn)\n"
-            f"- **{supp_cards[1].name}**: (Ý nghĩa ngắn gọn)\n"
-            f"- **{supp_cards[2].name}**: (Ý nghĩa ngắn gọn)\n\n"
-            f"**Lời khuyên:** (1 câu chốt lại hướng đi cuối cùng)"
+            f"- **{key_card.name}** (lá chính): (Vai trò cốt lõi, thông điệp quan trọng nhất)\n"
+            f"- **{supp_cards[0].name}**: (Cách lá này tác động hoặc bổ trợ cho lá chính)\n"
+            f"- **{supp_cards[1].name}**: (Tác động hoặc thông điệp bổ sung)\n"
+            f"- **{supp_cards[2].name}**: (Kết quả tiềm năng hoặc điều cần lưu ý)\n\n"
+
+            f"**Lời khuyên:**\n"
+            f"(1 câu ngắn gọn, thực tế, có thể hành động được)"
         )
         
         try:
