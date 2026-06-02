@@ -83,7 +83,6 @@ class XinKeoService:
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=prompt,
-                request_options={"timeout": 30},
             )
             explanation = response.text.strip() if response.text else ""
             return explanation or fallback

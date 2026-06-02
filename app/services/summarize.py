@@ -35,7 +35,6 @@ class SummarizeService:
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=prompt,
-                request_options={"timeout": 30},
             )
             result = response.text if response.text else "Không nhận được phản hồi từ mô hình."
             log.info(f"Gemini phản hồi thành công ({len(result)} ký tự).")
