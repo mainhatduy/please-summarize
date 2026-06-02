@@ -11,6 +11,7 @@ from app.services.music import MusicService
 from app.services.fortune import FortuneService
 from app.services.taixiu import TaiXiuService
 from app.services.xinkeo import XinKeoService
+from app.services.tarot import TarotService
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -32,6 +33,7 @@ music_service = MusicService()
 fortune_service = FortuneService()
 taixiu_service = TaiXiuService()
 xinkeo_service = XinKeoService()
+tarot_service = TarotService()
 
 # Cooldown tracker: {user_id: last_used_timestamp}
 _COOLDOWN_SECONDS = 60
@@ -243,6 +245,7 @@ async def help_cmd(ctx):
         "`.get_luck` – Roll vận may hôm nay (1 lần/ngày, reset 00:00)\n"
         "`.taixiu` (hoặc `.tx`) – Chơi Tài Xỉu 3 xúc xắc (kèm chẵn lẻ)\n"
         "`.xinkeo <lời khấn>` (hoặc `.xk`) – Xin keo truyền thống\n"
+        "`.tarot <câu hỏi>` – Xem bói Tarot (1 lá chính, 3 lá phụ)\n"
         "`.play <tên bài/link YouTube>` – Phát nhạc trong voice\n"
         "`.join` – Tham gia cuộc gọi thoại\n"
         "`.leave` / `.stop` – Rời cuộc gọi thoại\n"
@@ -515,8 +518,65 @@ async def xinkeo(ctx, *, wish: str = ""):
         f"**Lời luận giải:**\n{luan_giai}"
     )
     
+    
     await wait_msg.edit(content=result_text)
     log.info(f"[xinkeo] Hoàn thành gieo keo cho {ctx.author.name}: {result_type}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAROT ĐỌC BÀI - TAROT
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bot.command(name="tarot")
+async def tarot(ctx, *, question: str = ""):
+    """Lệnh: .tarot <câu hỏi> – Xem Tarot (1 lá chính, 3 lá phụ)"""
+    log.info(f"[tarot] Yêu cầu xem bói | author={ctx.author} | question='{question}' | channel_id={ctx.channel.id}")
+    if not question.strip():
+        await ctx.send("🔮 Vui lòng nhập câu hỏi của bạn. Ví dụ: `.tarot Hôm nay tôi có may mắn về tình duyên không?`")
+        return
+
+    wait_msg = await ctx.send(
+        f"🔮 **{ctx.author.name}** đang hỏi: *\"{question}\"*\n"
+        f"*Đang xáo bài và kết nối với các tinh linh...*"
+    )
+
+    # Rút bài
+    draw_result = tarot_service.draw_cards()
+    
+    # Render tên bài đang rút (hiệu ứng)
+    def fmt_card(c):
+        return f"**{c.name}** ({'Ngược' if c.is_reversed else 'Xuôi'})"
+        
+    drawn_text = (
+        f"🔮 **Trải bài của {ctx.author.name}**\n"
+        f"**Câu hỏi:** *\"{question}\"*\n\n"
+        f"✨ **Lá bài chính:** {fmt_card(draw_result['key_card'])}\n"
+        f"🃏 **3 lá bài phụ:** " + ", ".join(fmt_card(c) for c in draw_result["supporting_cards"]) + "\n\n"
+        f"*Đang chờ thông điệp từ cõi tâm linh...*"
+    )
+    await wait_msg.edit(content=drawn_text)
+    
+    # Sinh luận giải
+    loop = asyncio.get_event_loop()
+    reading = await loop.run_in_executor(None, tarot_service.generate_reading, question, draw_result, ctx.author.name)
+    
+    final_text = (
+        f"🔮 **TRẢI BÀI TAROT**\n"
+        f"**Người xem:** {ctx.author.name}\n"
+        f"**Câu hỏi:** *\"{question}\"*\n\n"
+        f"✨ **Lá bài chính (Key):** {fmt_card(draw_result['key_card'])}\n"
+        f"🃏 **Lá bài phụ (Support):** " + ", ".join(fmt_card(c) for c in draw_result["supporting_cards"]) + "\n\n"
+        f"**📜 Lời Luận Giải:**\n{reading}"
+    )
+    
+    # Chia nhỏ nếu độ dài vượt quá giới hạn discord
+    if len(final_text) > 1900:
+        await wait_msg.delete()
+        await send_long(ctx, final_text)
+    else:
+        await wait_msg.edit(content=final_text)
+        
+    log.info(f"[tarot] Hoàn thành đọc Tarot cho {ctx.author.name}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
