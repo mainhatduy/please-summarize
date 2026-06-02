@@ -1,106 +1,106 @@
 # Discord Group Chat Summarizer & Music Self-Bot
 
-Dự án này là một Discord Self-bot (chạy dưới danh nghĩa tài khoản cá nhân) giúp thực hiện 2 tính năng chính trong Nhóm chat riêng tư (Group Chat / Group DM):
-1. **Tóm tắt nội dung chat:** Thu thập $N$ tin nhắn gần nhất hoặc tin nhắn trong $N$ giờ trước đó, gửi qua Gemini API để dịch và tóm tắt ngắn gọn bằng tiếng Việt.
-2. **Phát nhạc YouTube:** Tải luồng âm thanh từ YouTube thông qua `yt-dlp` và stream trực tiếp vào cuộc gọi thoại (Voice Call) của nhóm chat sử dụng `FFmpeg`.
+This project is a Discord self-bot (running as a personal user account) that provides two main features for private group chats (Group Chat / Group DM):
+1. **Chat summarization:** Collect the latest N messages or messages from the last N hours, send them to the Gemini API for translation, and generate a concise summary in Vietnamese.
+2. **YouTube music playback:** Download the audio stream from YouTube via `yt-dlp` and stream it directly into the group's voice call using `FFmpeg`.
 
 ---
 
-## ⚠️ Lưu ý quan trọng (Discord ToS)
+## ⚠️ Important Notice (Discord ToS)
 
 > [!WARNING]
-> Việc sử dụng **Self-bot** (tự động hóa tài khoản cá nhân) là vi phạm **Điều khoản dịch vụ (ToS)** của Discord.
-> Tài khoản chạy bot này có nguy cơ bị Discord quét và khóa vĩnh viễn. 
-> Hãy **chỉ sử dụng tài khoản clone (tài khoản phụ)** để chạy thử nghiệm dự án này, tuyệt đối không dùng tài khoản chính.
+> Using a **Self-bot** (automating a personal account) violates Discord's **Terms of Service (ToS)**.
+> The account running this bot may be detected and permanently banned by Discord.
+> Use **only a clone/test account** for this project, and never use your main account.
 
 ---
 
-## 🛠️ Yêu cầu hệ thống
+## 🛠️ System Requirements
 
-Trước khi bắt đầu, hãy chắc chắn máy tính của bạn đã cài đặt:
-1. **Python 3.11** trở lên.
-2. **uv** (Bộ quản lý gói cực nhanh dành cho Python). Cài đặt thông qua:
+Before getting started, make sure your machine has:
+1. **Python 3.11** or newer.
+2. **uv** (a fast Python package manager). Install with:
    ```bash
    pip install uv
    ```
-3. **FFmpeg** (Công cụ xử lý và giải mã âm thanh).
+3. **FFmpeg** (audio processing and decoding tool).
    - **Ubuntu/Debian:** `sudo apt update && sudo apt install -y ffmpeg`
    - **macOS (Homebrew):** `brew install ffmpeg`
-   - **Windows:** Tải từ trang chủ FFmpeg và thêm thư mục `bin` vào biến môi trường PATH.
+   - **Windows:** Download from the FFmpeg website and add the `bin` folder to your PATH.
 
 ---
 
-## ⚙️ Cấu hình và Cài đặt
+## ⚙️ Configuration and Installation
 
-### 1. Chuẩn bị file `.env`
-Sao chép hoặc chỉnh sửa file `.env` ở thư mục gốc của dự án:
+### 1. Prepare the `.env` file
+Copy or create a `.env` file in the project root:
 ```env
 DISCORD_TOKEN=your_discord_user_token_here
 GEMINI_API_KEY=your_gemini_api_key_here
-# CHANNEL_ID=your_target_channel_id_here  # (Tùy chọn)
+# CHANNEL_ID=your_target_channel_id_here  # (Optional)
 ```
 
 > [!IMPORTANT]
-> **Cách lấy Discord User Token (Self-bot Token):**
-> 1. Mở Discord trên trình duyệt web (Chrome/Firefox) và đăng nhập tài khoản phụ.
-> 2. Nhấn `F12` (hoặc `Ctrl + Shift + I`) để mở Developer Tools, chọn tab **Network** (Mạng).
-> 3. Gõ một tin nhắn bất kỳ hoặc chuyển kênh để phát sinh request.
-> 4. Tìm các request có tên bắt đầu bằng `messages` hoặc `science`.
-> 5. Xem phần **Request Headers**, sao chép giá trị của trường **`Authorization`** (Đây chính là User Token của bạn, có dạng một chuỗi ký tự dài không bắt đầu bằng "Bot ").
-> 6. Dán token này vào biến `DISCORD_TOKEN` trong `.env`.
+> **How to get your Discord User Token (Self-bot Token):**
+> 1. Open Discord in a web browser (Chrome/Firefox) and sign in with your test account.
+> 2. Press `F12` (or `Ctrl + Shift + I`) to open Developer Tools, then select the **Network** tab.
+> 3. Send a message or switch channels to generate requests.
+> 4. Find a request with names starting with `messages` or `science`.
+> 5. In the **Request Headers**, copy the value of the **`Authorization`** field (this is your user token, a long string not prefixed with `Bot `).
+> 6. Paste this value into `DISCORD_TOKEN` in `.env`.
 
 > [!TIP]
-> **Cách cấu hình lọc kênh bằng CHANNEL_ID (Tùy chọn):**
-> Nếu muốn bot chỉ nhận và thực hiện lệnh trong một Group DM hoặc kênh chat cụ thể, bạn hãy thêm dòng `CHANNEL_ID=ID_KÊNH_CỦA_BẠN` vào file `.env`. Nếu không cấu hình biến này, bot sẽ phản hồi lệnh từ mọi kênh chat mà bạn tham gia.
+> **How to filter commands by CHANNEL_ID (Optional):**
+> If you want the bot to only respond in a specific Group DM or chat channel, add `CHANNEL_ID=YOUR_CHANNEL_ID` to `.env`. If not set, the bot will respond to commands from any chat it is in.
 
-### 2. Cài đặt các thư viện
-Sử dụng `uv` để đồng bộ và cài đặt toàn bộ dependencies trong file `requirements.txt`:
+### 2. Install dependencies
+Use `uv` to install all dependencies from `requirements.txt`:
 ```bash
 uv pip install -r requirements.txt
 ```
 
 ---
 
-## 🚀 Cách chạy Bot
+## 🚀 Run the Bot
 
-### Chạy trực tiếp (Local)
+### Run locally
 
-Khởi chạy ứng dụng bằng lệnh `uv`:
+Start the application with:
 ```bash
 uv run python -m app.main
 ```
 
-Bot sẽ tự động tải các biến môi trường từ file `.env` và đăng nhập vào tài khoản cá nhân của bạn.
+The bot will automatically load environment variables from `.env` and log in with your user account.
 
 ---
 
-## 🐳 Deploy bằng Docker
+## 🐳 Deploy with Docker
 
 > [!TIP]
-> Khuyến nghị dùng Docker để chạy bot liên tục trên server/VPS mà không cần cài Python hay FFmpeg thủ công.
+> Docker is recommended for running the bot continuously on a server/VPS without installing Python or FFmpeg manually.
 
-### Yêu cầu
+### Requirements
 
-- **Docker** đã được cài đặt ([hướng dẫn cài đặt](https://docs.docker.com/get-docker/))
+- **Docker** installed ([installation guide](https://docs.docker.com/get-docker/))
 
-### 1. Chuẩn bị file `.env`
+### 1. Prepare the `.env` file
 
-Tạo file `.env` ở thư mục gốc (xem hướng dẫn bên trên):
+Create a `.env` file in the project root (see the instructions above):
 ```env
 DISCORD_TOKEN=your_discord_user_token_here
 GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 > [!CAUTION]
-> Không bao giờ commit file `.env` lên Git. File `.gitignore` đã được cấu hình để bỏ qua nó.
+> Never commit your `.env` file to Git. `.gitignore` is configured to ignore it.
 
-### 2. Build image
+### 2. Build the image
 
 ```bash
 docker build -t discord-summarizer-bot .
 ```
 
-### 3. Chạy container
+### 3. Run the container
 
 ```bash
 docker run -d \
@@ -110,39 +110,39 @@ docker run -d \
   discord-summarizer-bot
 ```
 
-| Flag | Ý nghĩa |
+| Flag | Meaning |
 |---|---|
-| `-d` | Chạy nền (detached mode) |
-| `--name discord-bot` | Đặt tên container để dễ quản lý |
-| `--env-file .env` | Nạp biến môi trường từ file `.env` |
-| `--restart unless-stopped` | Tự restart nếu bot crash, trừ khi dừng thủ công |
+| `-d` | Run detached |
+| `--name discord-bot` | Set a container name for easier management |
+| `--env-file .env` | Load environment variables from `.env` |
+| `--restart unless-stopped` | Restart automatically if the bot crashes, unless stopped manually |
 
-### 4. Quản lý container
+### 4. Manage the container
 
 ```bash
-# Xem log (theo dõi realtime)
+# View logs in real time
 docker logs -f discord-bot
 
-# Xem log 50 dòng gần nhất
+# View the last 50 log lines
 docker logs discord-bot --tail 50
 
-# Dừng bot
+# Stop the bot
 docker stop discord-bot
 
-# Khởi động lại bot
+# Restart the bot
 docker restart discord-bot
 
-# Xóa container (cần dừng trước)
+# Remove the container (must stop first)
 docker rm discord-bot
 ```
 
-### 5. Cập nhật bot (khi có thay đổi code)
+### 5. Update the bot (after code changes)
 
 ```bash
-# Build lại image với code mới
+# Rebuild the image with updated code
 docker build -t discord-summarizer-bot .
 
-# Xóa container cũ và chạy lại
+# Remove the old container and run again
 docker rm -f discord-bot
 docker run -d \
   --name discord-bot \
@@ -153,19 +153,18 @@ docker run -d \
 
 ---
 
-## 📝 Danh sách câu lệnh (Prefix: `.`)
+## 📝 Command List (Prefix: `.`)
 
-Tất cả thành viên trong Group DM đều có thể sử dụng các lệnh sau:
+Anyone in the Group DM can use the following commands:
 
-### 💬 Lệnh tóm tắt tin nhắn (Text)
-*   `.tomtat <limit>` (hoặc `.sum_msgs`): Tóm tắt $N$ tin nhắn gần nhất trong group chat (Mặc định là 50 tin nhắn nếu không nhập số, tối đa 500 tin nhắn).
-*   `.tomtat_time <hours>` (hoặc `.sum_time`): Tóm tắt toàn bộ tin nhắn chat phát sinh trong $N$ giờ trước đó (Mặc định là 1 giờ, tối đa 12 giờ, tổng hợp tối đa 500 tin nhắn).
+### 💬 Text summary commands
+*   `.tomtat <limit>` (or `.sum_msgs`): Summarize the last N messages in the group chat (default 50 if unspecified, maximum 500 messages).
+*   `.tomtat_time <hours>` (or `.sum_time`): Summarize all messages from the last N hours (default 1 hour, maximum 12 hours, up to 500 total messages).
 
-### 🎶 Lệnh phát nhạc (Voice call)
-*   `.join`: Yêu cầu bot tham gia vào cuộc gọi thoại đang diễn ra của nhóm chat.
-*   `.play <tên bài hát hoặc link YouTube>`: Yêu cầu bot tham gia cuộc gọi (nếu chưa vào) và phát nhạc từ YouTube (hỗ trợ tìm kiếm theo tên hoặc nhận diện link trực tiếp).
-*   `.leave` (hoặc `.stop`): Dừng phát nhạc và ngắt kết nối bot khỏi cuộc gọi thoại.
-
+### 🎶 Voice call music commands
+*   `.join`: Ask the bot to join the ongoing group voice call.
+*   `.play <song name or YouTube link>`: Ask the bot to join the call (if not already in) and play music from YouTube (supports search by name or direct link).
+*   `.leave` (or `.stop`): Stop playback and disconnect the bot from the voice call.
 
 ```bash
 docker build -t discord-summarizer-bot .
