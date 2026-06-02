@@ -62,7 +62,7 @@ class TarotService:
             "supporting_cards": drawn[1:4]
         }
 
-    def generate_reading(self, question: str, draw_result: dict, user_name: str) -> str:
+    def generate_reading(self, question: str, draw_result: dict, user_name: str, recent_messages: list[str] = None) -> str:
         """Sử dụng Gemini để luận giải các lá bài dựa trên câu hỏi."""
         key_card = draw_result["key_card"]
         supp_cards = draw_result["supporting_cards"]
@@ -74,9 +74,14 @@ class TarotService:
         key_str = format_card(key_card)
         supp_str = ", ".join([format_card(c) for c in supp_cards])
         
+        chat_log = "\n".join(recent_messages) if recent_messages else "Không có thông tin trò chuyện gần đây."
+        
         prompt = (
             f"Người dùng hỏi: '{question}'\n"
             f"Lá chính: {key_str} | 3 lá phụ: {supp_str}\n\n"
+            f"Thông tin bổ sung - Các tin nhắn gần đây của người dùng:\n"
+            f"\"\"\"\n{chat_log}\n\"\"\"\n\n"
+            f"Dựa vào các tin nhắn trên, hãy cảm nhận tâm trạng/cảm xúc hiện tại của người dùng để điều chỉnh văn phong (đồng cảm, an ủi, hoặc động viên) cho phù hợp.\n\n"
             f"Yêu cầu luận giải cực kỳ ngắn gọn. KHÔNG chào hỏi, KHÔNG viết dòng thừa, ĐI THẲNG vào vấn đề theo ĐÚNG form sau:\n\n"
             f"**Tổng quan:** (1-2 câu tóm tắt nhanh tình hình)\n\n"
             f"**Phân tích:**\n"
@@ -84,7 +89,7 @@ class TarotService:
             f"- **{supp_cards[0].name}**: (Ý nghĩa ngắn gọn)\n"
             f"- **{supp_cards[1].name}**: (Ý nghĩa ngắn gọn)\n"
             f"- **{supp_cards[2].name}**: (Ý nghĩa ngắn gọn)\n\n"
-            f"**Lời khuyên:** (1 câu chốt lại hướng đi cuối cùng)"
+            f"**Lời khuyên:** (Đúng 2 câu chốt lại hướng đi cuối cùng)"
         )
         
         try:

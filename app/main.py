@@ -539,6 +539,21 @@ async def tarot(ctx, *, question: str = ""):
         f"🔮 **{ctx.author.name}** đang hỏi: *\"{question}\"*\n"
         f"*Đang xáo bài và kết nối với các tinh linh...*"
     )
+    
+    await _apply_channel_rate_limit(ctx.channel.id)
+    user_messages: list[str] = []
+    async for msg in ctx.channel.history(limit=200):
+        if msg.id == ctx.message.id:
+            continue
+        if msg.author.id != ctx.author.id:
+            continue
+        if not msg.content.strip() or msg.content.strip().startswith(bot.command_prefix):
+            continue
+        user_messages.append(msg.content.strip())
+        if len(user_messages) >= 14:
+            break
+            
+    user_messages.reverse()
 
     # Rút bài
     draw_result = tarot_service.draw_cards()
@@ -558,7 +573,7 @@ async def tarot(ctx, *, question: str = ""):
     
     # Sinh luận giải
     loop = asyncio.get_event_loop()
-    reading = await loop.run_in_executor(None, tarot_service.generate_reading, question, draw_result, ctx.author.name)
+    reading = await loop.run_in_executor(None, tarot_service.generate_reading, question, draw_result, ctx.author.name, user_messages)
     
     final_text = (
         f"🔮 **TRẢI BÀI TAROT**\n"
