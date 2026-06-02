@@ -75,16 +75,16 @@ class TarotService:
         supp_str = ", ".join([format_card(c) for c in supp_cards])
         
         prompt = (
-            f"Bạn là Tarot Reader chuyên nghiệp, thông thái và luôn trả lời ngắn gọn, súc tích.\n"
-            f"Người dùng '{user_name}' hỏi: '{question}'\n\n"
-            f"Trải bài:\n"
-            f"- Lá chính: {key_str}\n"
-            f"- 3 lá phụ: {supp_str}\n\n"
-            f"Yêu cầu luận giải cực kỳ ngắn gọn, đi thẳng vào vấn đề nhưng vẫn giữ cấu trúc sau:\n"
-            f"1. Tổng quan: Đánh giá nhanh tình hình (1-2 câu).\n"
-            f"2. Phân tích: Tóm tắt ý nghĩa lá chính và sự bổ trợ của 3 lá phụ (3-4 câu).\n"
-            f"3. Lời khuyên: Đưa ra lời khuyên hoặc hướng giải quyết ở phần cuối cùng (1-2 câu).\n\n"
-            f"Lưu ý: Trình bày súc tích, chia đoạn rõ ràng bằng văn bản thuần túy hoặc Markdown (dùng in đậm, in nghiêng hợp lý, không cần dùng code block)."
+            f"Người dùng hỏi: '{question}'\n"
+            f"Lá chính: {key_str} | 3 lá phụ: {supp_str}\n\n"
+            f"Yêu cầu luận giải cực kỳ ngắn gọn. KHÔNG chào hỏi, KHÔNG viết dòng thừa, ĐI THẲNG vào vấn đề theo ĐÚNG form sau:\n\n"
+            f"**Tổng quan:** (1-2 câu tóm tắt nhanh tình hình)\n\n"
+            f"**Phân tích:**\n"
+            f"- **{key_card.name}**: (Ý nghĩa ngắn gọn của lá chính)\n"
+            f"- **{supp_cards[0].name}**: (Ý nghĩa ngắn gọn)\n"
+            f"- **{supp_cards[1].name}**: (Ý nghĩa ngắn gọn)\n"
+            f"- **{supp_cards[2].name}**: (Ý nghĩa ngắn gọn)\n\n"
+            f"**Lời khuyên:** (1 câu chốt lại hướng đi cuối cùng)"
         )
         
         try:
