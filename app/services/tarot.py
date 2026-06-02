@@ -54,8 +54,9 @@ class TarotService:
 
     def draw_cards(self) -> dict:
         """Rút 4 lá bài ngẫu nhiên không trùng lập: 1 lá key, 3 lá phụ. Trả về tên và chiều (xuôi/ngược)."""
-        selected = random.sample(TAROT_CARDS, 4)
-        drawn = [DrawnCard(name=card, is_reversed=random.choice([True, False])) for card in selected]
+        secure_random = random.SystemRandom()
+        selected = secure_random.sample(TAROT_CARDS, 4)
+        drawn = [DrawnCard(name=card, is_reversed=secure_random.choice([True, False])) for card in selected]
         
         return {
             "key_card": drawn[0],
@@ -63,7 +64,7 @@ class TarotService:
         }
 
     def generate_reading(self, question: str, draw_result: dict, user_name: str) -> str:
-        """Sử dụng Gemini để luận giải các lá bài dựa trên câu hỏi."""
+        """Sử dụng Gemini để luận giải các lá bài dựa trên câu hỏi và tên người cầu."""
         key_card = draw_result["key_card"]
         supp_cards = draw_result["supporting_cards"]
         
@@ -74,8 +75,12 @@ class TarotService:
         key_str = format_card(key_card)
         supp_str = ", ".join([format_card(c) for c in supp_cards])
         
+        def card_header(card: DrawnCard):
+            return f"{card.name} ({'Ngược' if card.is_reversed else 'Xuôi'})"
+        
         prompt = (
-            f"Người dùng hỏi: '{question}'\n"
+            f"Người cầu: {user_name}\n"
+            f"Câu hỏi: '{question}'\n"
             f"Lá chính: {key_str}\n"
             f"3 lá phụ: {supp_str}\n\n"
 
@@ -85,7 +90,7 @@ class TarotService:
             f"- Lá chính là năng lượng/trọng tâm cốt lõi của trải bài.\n"
             f"- Các lá phụ dùng để giải thích, bổ sung, hỗ trợ hoặc cảnh báo cho lá chính.\n"
             f"- Không giải nghĩa từng lá một cách tách biệt; phải liên kết các lá thành một câu chuyện thống nhất.\n"
-            f"- Ưu tiên trả lời đúng trọng tâm câu hỏi của người dùng.\n"
+            f"- Ưu tiên trả lời đúng trọng tâm câu hỏi và hướng trực tiếp tới {user_name}.\n"
             f"- Nêu cả mặt tích cực và thách thức nếu có.\n"
             f"- Văn phong súc tích nhưng có chiều sâu.\n"
             f"- Không mê tín tuyệt đối, trình bày như một góc nhìn tham khảo.\n\n"
@@ -93,16 +98,16 @@ class TarotService:
             f"Yêu cầu trả lời cực kỳ ngắn gọn theo đúng định dạng:\n\n"
 
             f"**Tổng quan:**\n"
-            f"(1-2 câu tóm tắt tình hình, kết luận chính từ toàn bộ trải bài)\n\n"
+            f"(1-2 câu tóm tắt tình hình, kết luận chính từ toàn bộ trải bài gửi đến {user_name})\n\n"
 
             f"**Phân tích:**\n"
-            f"- **{key_card.name}** (lá chính): (Vai trò cốt lõi, thông điệp quan trọng nhất)\n"
-            f"- **{supp_cards[0].name}**: (Cách lá này tác động hoặc bổ trợ cho lá chính)\n"
-            f"- **{supp_cards[1].name}**: (Tác động hoặc thông điệp bổ sung)\n"
-            f"- **{supp_cards[2].name}**: (Kết quả tiềm năng hoặc điều cần lưu ý)\n\n"
+            f"- **{card_header(key_card)}** (lá chính): (Vai trò cốt lõi, thông điệp quan trọng nhất)\n"
+            f"- **{card_header(supp_cards[0])}**: (Cách lá này tác động hoặc bổ trợ cho lá chính)\n"
+            f"- **{card_header(supp_cards[1])}**: (Tác động hoặc thông điệp bổ sung)\n"
+            f"- **{card_header(supp_cards[2])}**: (Kết quả tiềm năng hoặc điều cần lưu ý)\n\n"
 
             f"**Lời khuyên:**\n"
-            f"(1 câu ngắn gọn, thực tế, có thể hành động được)"
+            f"(1 câu ngắn gọn dành cho {user_name}, thực tế, có thể hành động được)"
         )
         
         try:
