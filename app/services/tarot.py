@@ -1,5 +1,7 @@
 import logging
 import random
+import time
+import hashlib
 from dataclasses import dataclass
 from google import genai
 from app.core.config import Config
@@ -52,10 +54,18 @@ class TarotService:
         self.client = genai.Client(api_key=Config.GEMINI_API_KEY)
         self.model = Config.MODEL_NAME
 
-    def draw_cards(self) -> dict:
-        """Rút 4 lá bài ngẫu nhiên không trùng lập: 1 lá key, 3 lá phụ. Trả về tên và chiều (xuôi/ngược)."""
-        selected = random.sample(TAROT_CARDS, 4)
-        drawn = [DrawnCard(name=card, is_reversed=random.choice([True, False])) for card in selected]
+    def draw_cards(self, question: str) -> dict:
+        """Rút 4 lá bài ngẫu nhiên dựa trên seed từ câu hỏi và thời gian hiện tại."""
+        # Tạo seed từ câu hỏi và timestamp
+        current_time = str(time.time())
+        seed_str = f"{question}_{current_time}"
+        seed_int = int(hashlib.md5(seed_str.encode('utf-8')).hexdigest(), 16)
+        
+        # Dùng local Random instance để không ảnh hưởng đến các random khác
+        rng = random.Random(seed_int)
+        
+        selected = rng.sample(TAROT_CARDS, 4)
+        drawn = [DrawnCard(name=card, is_reversed=rng.choice([True, False])) for card in selected]
         
         return {
             "key_card": drawn[0],
