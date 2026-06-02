@@ -204,6 +204,7 @@ class FortuneService:
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=prompt,
+                request_options={"timeout": 30},
             )
             result = response.text.strip() if response.text else ""
             return result or tier.fortune_msg
