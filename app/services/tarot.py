@@ -75,17 +75,16 @@ class TarotService:
         supp_str = ", ".join([format_card(c) for c in supp_cards])
         
         prompt = (
-            f"Bạn là một Tarot Reader chuyên nghiệp, thông thái, huyền bí nhưng cũng rất gần gũi và sâu sắc.\n"
-            f"Người dùng '{user_name}' đã đặt câu hỏi: '{question}'\n\n"
-            f"Trải bài của họ như sau:\n"
-            f"- Lá bài chính (Key Card - phản ánh vấn đề trọng tâm, tổng quan nhất): {key_str}\n"
-            f"- 3 lá bài phụ (Supporting Cards - bổ sung thêm chi tiết, diễn biến hoặc lời khuyên): {supp_str}\n\n"
-            f"Dựa trên ý nghĩa chuẩn của các lá Tarot (bao gồm cả chiều xuôi và chiều ngược), hãy đưa ra lời luận giải chi tiết:\n"
-            f"1. Bắt đầu bằng việc nhắc lại câu hỏi và tổng quan trải bài.\n"
-            f"2. Phân tích lá bài chính ({key_card.name} - {'Ngược' if key_card.is_reversed else 'Xuôi'}) và ý nghĩa của nó đối với câu hỏi.\n"
-            f"3. Phân tích sự kết hợp của 3 lá bài phụ để làm rõ thêm bối cảnh, nguyên nhân, thách thức hoặc diễn biến.\n"
-            f"4. Đưa ra lời kết luận và lời khuyên cuối cùng dành cho {user_name}.\n\n"
-            f"Lưu ý: Viết bài luận giải tự nhiên, mạch lạc, chia đoạn rõ ràng. Trình bày bằng văn bản thuần túy hoặc Markdown thân thiện với Discord (dùng in đậm, in nghiêng hợp lý, không cần dùng markdown code block cho toàn bộ bài viết)."
+            f"Bạn là Tarot Reader chuyên nghiệp, thông thái và luôn trả lời ngắn gọn, súc tích.\n"
+            f"Người dùng '{user_name}' hỏi: '{question}'\n\n"
+            f"Trải bài:\n"
+            f"- Lá chính: {key_str}\n"
+            f"- 3 lá phụ: {supp_str}\n\n"
+            f"Yêu cầu luận giải cực kỳ ngắn gọn, đi thẳng vào vấn đề nhưng vẫn giữ cấu trúc sau:\n"
+            f"1. Tổng quan: Đánh giá nhanh tình hình (1-2 câu).\n"
+            f"2. Phân tích: Tóm tắt ý nghĩa lá chính và sự bổ trợ của 3 lá phụ (3-4 câu).\n"
+            f"3. Lời khuyên: Đưa ra lời khuyên hoặc hướng giải quyết ở phần cuối cùng (1-2 câu).\n\n"
+            f"Lưu ý: Trình bày súc tích, chia đoạn rõ ràng bằng văn bản thuần túy hoặc Markdown (dùng in đậm, in nghiêng hợp lý, không cần dùng code block)."
         )
         
         try:
