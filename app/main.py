@@ -12,6 +12,7 @@ from app.services.fortune import FortuneService
 from app.services.taixiu import TaiXiuService
 from app.services.xinkeo import XinKeoService
 from app.services.tarot import TarotService
+from app.services.tiktok import TikTokService
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -34,6 +35,7 @@ fortune_service = FortuneService()
 taixiu_service = TaiXiuService()
 xinkeo_service = XinKeoService()
 tarot_service = TarotService()
+tiktok_service = TikTokService()
 
 # Cooldown tracker: {user_id: last_used_timestamp}
 _COOLDOWN_SECONDS = 60
@@ -134,6 +136,13 @@ async def on_message(message):
         return
 
     content = message.content
+
+    # ── AUTO-DETECT TIKTOK ────────────────────────────────────────
+    tiktok_url = tiktok_service.detect_tiktok_url(content)
+    if tiktok_url:
+        await handle_tiktok(message, tiktok_url)
+    # ──────────────────────────────────────────────────────────────
+
     prefix = bot.command_prefix
 
     # Chỉ xử lý tin nhắn có tiền tố lệnh
@@ -232,6 +241,59 @@ async def _apply_channel_rate_limit(channel_id: int):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# AUTO TIKTOK – DOWNLOAD VIDEO / ẢNH
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def handle_tiktok(message, url: str):
+    """Tự động tải và gửi video/ảnh TikTok khi detect link."""
+    log.info(f"[tiktok] Detected TikTok URL: {url} | channel_id={message.channel.id}")
+    await message.add_reaction("⏳")
+
+    result = None
+    try:
+        result = await tiktok_service.download(url)
+
+        if result.content_type == "video":
+            if result.file_size_mb > 25:
+                # Quá lớn → gửi direct link
+                await message.channel.send(result.direct_url)
+            else:
+                file = discord.File(result.file_path)
+                await message.channel.send(file=file)
+
+        elif result.content_type == "slideshow":
+            # Gửi từng ảnh (Discord cho phép tối đa 10 file/message)
+            batch_size = 10
+            for i in range(0, len(result.image_paths), batch_size):
+                batch = result.image_paths[i:i + batch_size]
+                files = [discord.File(p) for p in batch]
+                await message.channel.send(files=files)
+                if i + batch_size < len(result.image_paths):
+                    await asyncio.sleep(random.uniform(_SEND_JITTER_MIN, _SEND_JITTER_MAX))
+
+        await message.remove_reaction("⏳", bot.user)
+        await message.add_reaction("✅")
+        log.info(f"[tiktok] Hoàn thành gửi {result.content_type} cho channel {message.channel.id}")
+
+    except Exception as e:
+        log.error(f"[tiktok] Error: {e}", exc_info=True)
+        try:
+            await message.remove_reaction("⏳", bot.user)
+            await message.add_reaction("❌")
+        except Exception:
+            pass  # Bỏ qua lỗi reaction
+
+    finally:
+        if result is not None:
+            paths_to_clean = []
+            if result.file_path:
+                paths_to_clean.append(result.file_path)
+            if result.image_paths:
+                paths_to_clean.extend(result.image_paths)
+            tiktok_service.cleanup(*paths_to_clean)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # LỆNH HELP
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -240,6 +302,7 @@ async def help_cmd(ctx):
     """Lệnh: .help – Hiển thị danh sách lệnh"""
     await ctx.send(
         "**📋 Danh sách lệnh:**\n"
+        "🎬 **Auto TikTok:** Paste link TikTok → bot tự gửi video/ảnh\n"
         "`.tomtat [n]` – Tóm tắt n tin nhắn gần nhất (mặc định 50, tối đa 500)\n"
         "`.tomtat_time [giờ]` – Tóm tắt tin nhắn trong n giờ qua (mặc định 1, tối đa 12)\n"
         "`.get_luck` – Roll vận may hôm nay (1 lần/ngày, reset 00:00)\n"
