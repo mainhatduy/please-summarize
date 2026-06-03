@@ -259,7 +259,7 @@ async def handle_tiktok(message, url: str):
         result = await tiktok_service.download(url)
 
         if result.content_type == "video":
-            if result.file_size_mb > 25:
+            if result.file_size_mb > 10:
                 await message.channel.send(result.direct_url)
             else:
                 file = discord.File(result.file_path)
