@@ -1,6 +1,7 @@
 """TikTok download service – dùng TikWM API (chính) + yt-dlp (fallback)."""
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -92,6 +93,68 @@ class TikTokService:
                 except OSError as e:
                     log.warning(f"[tiktok] Failed to cleanup {p}: {e}")
 
+    # ── H.265 → H.264 re-encode ──────────────────────────────────────────────
+
+    async def _is_h265(self, file_path: str) -> bool:
+        """Dùng ffprobe kiểm tra video có phải codec H.265/HEVC không."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ffprobe", "-v", "quiet",
+                "-print_format", "json",
+                "-show_streams", "-select_streams", "v:0",
+                file_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await proc.communicate()
+            info = json.loads(stdout)
+            codec = info.get("streams", [{}])[0].get("codec_name", "")
+            log.debug(f"[tiktok] Video codec: {codec}")
+            return codec in ("hevc", "h265")
+        except Exception as e:
+            log.warning(f"[tiktok] ffprobe check failed: {e}")
+            # Không chắc chắn → re-encode cho an toàn
+            return True
+
+    async def _reencode_to_h264(self, src: str) -> str:
+        """Re-encode video sang H.264 bằng ffmpeg. Giữ nguyên resolution."""
+        dst = src.replace(".mp4", "_h264.mp4")
+        log.info(f"[tiktok] Re-encoding H.265 → H.264: {os.path.basename(src)}")
+
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-i", src,
+            "-c:v", "libx264", "-preset", "ultrafast",
+            "-crf", "23",
+            "-c:a", "aac", "-b:a", "128k",
+            "-movflags", "+faststart",
+            dst,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await proc.communicate()
+
+        if proc.returncode != 0:
+            log.error(f"[tiktok] ffmpeg re-encode failed: {stderr.decode(errors='replace')[-500:]}")
+            # Trả về file gốc nếu re-encode thất bại
+            return src
+
+        # Xóa file gốc, đổi tên file mới
+        try:
+            os.remove(src)
+            os.rename(dst, src)
+        except OSError:
+            return dst
+
+        log.info(f"[tiktok] Re-encode hoàn tất: {os.path.basename(src)}")
+        return src
+
+    async def _ensure_h264(self, file_path: str) -> str:
+        """Kiểm tra codec và re-encode nếu cần. Trả về đường dẫn file cuối cùng."""
+        if await self._is_h265(file_path):
+            return await self._reencode_to_h264(file_path)
+        log.debug(f"[tiktok] Video đã là H.264, bỏ qua re-encode.")
+        return file_path
+
     # ── TikWM API ─────────────────────────────────────────────────────────────
 
     async def _fetch_tikwm(self, url: str) -> dict | None:
@@ -147,6 +210,9 @@ class TikTokService:
             resp.raise_for_status()
             with open(file_path, "wb") as f:
                 f.write(resp.content)
+
+        # Re-encode H.265 → H.264 nếu cần (fix lỗi browser Linux)
+        file_path = await self._ensure_h264(file_path)
 
         file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
         log.info(f"[tiktok] Video downloaded: {file_path} ({file_size_mb:.1f} MB)")
@@ -233,6 +299,10 @@ class TikTokService:
                 return info, file_path
 
         info, file_path = await asyncio.to_thread(_extract_and_download)
+
+        # Re-encode H.265 → H.264 nếu cần (fix lỗi browser Linux)
+        if os.path.exists(file_path):
+            file_path = await self._ensure_h264(file_path)
 
         file_size_mb = os.path.getsize(file_path) / (1024 * 1024) if os.path.exists(file_path) else 0
         direct_url = info.get("webpage_url") or info.get("url") or url
