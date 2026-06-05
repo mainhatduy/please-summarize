@@ -752,6 +752,7 @@ async def leave(ctx):
     voice_client = discord.utils.get(bot.voice_clients, channel=ctx.channel)
     if voice_client and voice_client.is_connected():
         if voice_client.is_playing():
+            _skip_requests.add(voice_client.channel.id)
             voice_client.stop()
             log.debug("[leave] Đã dừng phát nhạc.")
         await voice_client.disconnect()
@@ -852,37 +853,17 @@ async def next_track(ctx):
         await ctx.send("❌ Không có bài kế tiếp trong hàng đợi.")
         return
     
-    # Lấy bài hát tiếp theo
-    next_track = queue.pop(0)
-    if queue:
-        _song_queues[channel_id] = queue
-    else:
-        _song_queues.pop(channel_id, None)
+    # Chỉ peek bài tiếp theo để thông báo, KHÔNG pop — để _play_next_track tự xử lý
+    next_song_title = queue[0]['title']
+    log.info(f"[next] Đang skip bài hiện tại, bài tiếp theo sẽ là: '{next_song_title}'")
     
-    # Dừng phát hiện tại
-    _skip_requests.add(channel_id)
+    await ctx.send(
+        f"⏭️ Bỏ qua bài hiện tại, chuyển sang: **{next_song_title}**"
+    )
+    
+    # Dừng bài hiện tại — callback _play_after sẽ tự gọi _play_next_track
+    # để pop bài tiếp theo từ queue và phát, tránh race condition double-pop
     voice_client.stop()
-    log.info(f"[next] Đã dừng bài hiện tại, chuẩn bị phát: '{next_track['title']}'")
-    
-    # Phát bài tiếp theo
-    try:
-        source = discord.FFmpegPCMAudio(next_track['audio_url'], **music_service.ffmpeg_options)
-        voice_client.play(
-            source,
-            after=lambda error: _play_after(channel_id, error)
-        )
-        _currently_playing[channel_id] = next_track
-        _skip_requests.discard(channel_id)
-        
-        queue_list = format_queue(channel_id)
-        log.info(f"[next] Đang phát: '{next_track['title']}'")
-        await ctx.send(
-            f"⏭️ Chuyển sang bài kế tiếp: **{next_track['title']}**\n\n**Hàng đợi hiện tại:**\n{queue_list}"
-        )
-    except Exception as e:
-        _skip_requests.discard(channel_id)
-        log.error(f"[next] Lỗi khi phát bài tiếp theo: {e}", exc_info=True)
-        await ctx.send(f"❌ Có lỗi xảy ra khi phát bài tiếp theo: {str(e)}")
 
 
 @bot.command(name="queue")
