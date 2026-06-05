@@ -378,6 +378,8 @@ async def help_cmd(ctx):
         "`.xinkeo <lời khấn>` (hoặc `.xk`) – Xin keo truyền thống\n"
         "`.tarot <câu hỏi>` – Xem bói Tarot (1 lá chính, 3 lá phụ)\n"
         "`.play <tên bài/link YouTube>` – Phát nhạc trong voice\n"
+        "`.next` – Chuyển sang bài hát tiếp theo trong hàng đợi\n"
+        "`.queue` – Xem danh sách hàng đợi nhạc\n"
         "`.join` – Tham gia cuộc gọi thoại\n"
         "`.leave` / `.stop` – Rời cuộc gọi thoại\n"
         "`.help` – Hiển thị danh sách lệnh này\n"
@@ -817,6 +819,97 @@ async def play(ctx, *, query: str):
     except Exception as e:
         log.error(f"[play] Lỗi không mong muốn: {e}", exc_info=True)
         await ctx.send(f"Có lỗi xảy ra khi phát nhạc: {str(e)}")
+
+
+@bot.command(name="next", aliases=["skip"])
+async def next_track(ctx):
+    """Lệnh: .next (hoặc .skip) – Chuyển sang bài hát tiếp theo trong hàng đợi"""
+    log.info(f"[next] Yêu cầu chuyển bài kế tiếp | channel_id={ctx.channel.id}")
+    
+    voice_client = discord.utils.get(bot.voice_clients, channel=ctx.channel)
+    if not voice_client or not voice_client.is_connected():
+        log.warning("[next] Bot không ở trong cuộc gọi thoại nào.")
+        await ctx.send("❌ Bot không ở trong cuộc gọi thoại nào. Hãy dùng `.play` để phát nhạc trước.")
+        return
+    
+    if not voice_client.is_playing():
+        log.warning("[next] Không có bài hát nào đang phát.")
+        await ctx.send("❌ Không có bài hát nào đang phát. Hãy dùng `.play` để phát nhạc trước.")
+        return
+    
+    channel_id = voice_client.channel.id
+    queue = _song_queues.get(channel_id, [])
+    
+    if not queue:
+        log.info(f"[next] Không có bài kế tiếp trong hàng đợi của kênh {channel_id}.")
+        await ctx.send("❌ Không có bài kế tiếp trong hàng đợi.")
+        return
+    
+    # Lấy bài hát tiếp theo
+    next_track = queue.pop(0)
+    if queue:
+        _song_queues[channel_id] = queue
+    else:
+        _song_queues.pop(channel_id, None)
+    
+    # Dừng phát hiện tại
+    voice_client.stop()
+    log.info(f"[next] Đã dừng bài hiện tại, chuẩn bị phát: '{next_track['title']}'")
+    
+    # Phát bài tiếp theo
+    try:
+        source = discord.FFmpegPCMAudio(next_track['audio_url'], **music_service.ffmpeg_options)
+        voice_client.play(
+            source,
+            after=lambda error: _play_after(channel_id, error)
+        )
+        _currently_playing[channel_id] = next_track
+        
+        queue_list = format_queue(channel_id)
+        log.info(f"[next] Đang phát: '{next_track['title']}'")
+        await ctx.send(
+            f"⏭️ Chuyển sang bài kế tiếp: **{next_track['title']}**\n\n**Hàng đợi hiện tại:**\n{queue_list}"
+        )
+    except Exception as e:
+        log.error(f"[next] Lỗi khi phát bài tiếp theo: {e}", exc_info=True)
+        await ctx.send(f"❌ Có lỗi xảy ra khi phát bài tiếp theo: {str(e)}")
+
+
+@bot.command(name="queue")
+async def show_queue(ctx):
+    """Lệnh: .queue – Xem danh sách hàng đợi nhạc hiện tại"""
+    log.info(f"[queue] Yêu cầu xem hàng đợi | channel_id={ctx.channel.id}")
+    
+    voice_client = discord.utils.get(bot.voice_clients, channel=ctx.channel)
+    if not voice_client or not voice_client.is_connected():
+        log.warning("[queue] Bot không ở trong cuộc gọi thoại nào.")
+        await ctx.send("❌ Bot không ở trong cuộc gọi thoại nào.")
+        return
+    
+    channel_id = voice_client.channel.id
+    currently = _currently_playing.get(channel_id)
+    queue = _song_queues.get(channel_id, [])
+    
+    if not currently and not queue:
+        log.info("[queue] Không có bài nào đang phát hoặc trong hàng đợi.")
+        await ctx.send("Không có bài hát nào đang phát hoặc trong hàng đợi.")
+        return
+    
+    # Format response
+    text = "🎵 **Danh sách phát nhạc:**\n\n"
+    
+    if currently:
+        text += f"▶️ **Đang phát:** {currently['title']}\n"
+    
+    if queue:
+        text += "\n**📜 Hàng đợi:**\n"
+        text += format_queue(channel_id)
+    else:
+        if currently:
+            text += "\n*(Không có bài nào trong hàng đợi)*"
+    
+    log.info(f"[queue] Gửi danh sách hàng đợi với {len(queue)} bài")
+    await ctx.send(text)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
