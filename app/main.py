@@ -58,6 +58,7 @@ _alone_checker_started = False
 _song_queues: dict[int, list[dict]] = {}
 _currently_playing: dict[int, dict] = {}
 _queue_text_channels: dict[int, discord.abc.Messageable] = {}
+_skip_requests: set[int] = set()
 
 
 def format_queue(channel_id: int) -> str:
@@ -76,6 +77,12 @@ def get_voice_client_by_channel(channel_id: int):
 def _play_after(channel_id: int, error):
     if error:
         log.error(f"[play] Lỗi khi phát: {error}")
+
+    if channel_id in _skip_requests:
+        log.debug(f"[play] Bỏ qua callback after do lệnh skip đang xử lý ở kênh {channel_id}.")
+        _skip_requests.discard(channel_id)
+        return
+
     bot.loop.call_soon_threadsafe(lambda: asyncio.create_task(_play_next_track(channel_id)))
 
 
@@ -853,6 +860,7 @@ async def next_track(ctx):
         _song_queues.pop(channel_id, None)
     
     # Dừng phát hiện tại
+    _skip_requests.add(channel_id)
     voice_client.stop()
     log.info(f"[next] Đã dừng bài hiện tại, chuẩn bị phát: '{next_track['title']}'")
     
@@ -864,6 +872,7 @@ async def next_track(ctx):
             after=lambda error: _play_after(channel_id, error)
         )
         _currently_playing[channel_id] = next_track
+        _skip_requests.discard(channel_id)
         
         queue_list = format_queue(channel_id)
         log.info(f"[next] Đang phát: '{next_track['title']}'")
@@ -871,6 +880,7 @@ async def next_track(ctx):
             f"⏭️ Chuyển sang bài kế tiếp: **{next_track['title']}**\n\n**Hàng đợi hiện tại:**\n{queue_list}"
         )
     except Exception as e:
+        _skip_requests.discard(channel_id)
         log.error(f"[next] Lỗi khi phát bài tiếp theo: {e}", exc_info=True)
         await ctx.send(f"❌ Có lỗi xảy ra khi phát bài tiếp theo: {str(e)}")
 
