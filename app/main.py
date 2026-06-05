@@ -752,6 +752,7 @@ async def leave(ctx):
     voice_client = discord.utils.get(bot.voice_clients, channel=ctx.channel)
     if voice_client and voice_client.is_connected():
         if voice_client.is_playing():
+            _skip_requests.add(voice_client.channel.id)
             voice_client.stop()
             log.debug("[leave] Đã dừng phát nhạc.")
         await voice_client.disconnect()
@@ -862,6 +863,10 @@ async def next_track(ctx):
     # Dừng phát hiện tại
     _skip_requests.add(channel_id)
     voice_client.stop()
+    for _ in range(20):
+        if not voice_client.is_playing():
+            break
+        await asyncio.sleep(0.05)
     log.info(f"[next] Đã dừng bài hiện tại, chuẩn bị phát: '{next_track['title']}'")
     
     # Phát bài tiếp theo
@@ -872,7 +877,6 @@ async def next_track(ctx):
             after=lambda error: _play_after(channel_id, error)
         )
         _currently_playing[channel_id] = next_track
-        _skip_requests.discard(channel_id)
         
         queue_list = format_queue(channel_id)
         log.info(f"[next] Đang phát: '{next_track['title']}'")
@@ -880,7 +884,6 @@ async def next_track(ctx):
             f"⏭️ Chuyển sang bài kế tiếp: **{next_track['title']}**\n\n**Hàng đợi hiện tại:**\n{queue_list}"
         )
     except Exception as e:
-        _skip_requests.discard(channel_id)
         log.error(f"[next] Lỗi khi phát bài tiếp theo: {e}", exc_info=True)
         await ctx.send(f"❌ Có lỗi xảy ra khi phát bài tiếp theo: {str(e)}")
 
