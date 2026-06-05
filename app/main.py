@@ -54,6 +54,71 @@ _SEND_JITTER_MAX = 0.8                # delay ngẫu nhiên tối đa giữa cá
 _alone_since: dict[int, float] = {}
 _alone_checker_started = False
 
+# Hàng đợi nhạc theo voice channel id
+_song_queues: dict[int, list[dict]] = {}
+_currently_playing: dict[int, dict] = {}
+_queue_text_channels: dict[int, discord.abc.Messageable] = {}
+
+
+def format_queue(channel_id: int) -> str:
+    queue = _song_queues.get(channel_id, [])
+    if not queue:
+        return "(Không có bài nào trong hàng đợi.)"
+
+    lines = [f"{idx}. {item['title']}" for idx, item in enumerate(queue, start=1)]
+    return "\n".join(lines)
+
+
+def get_voice_client_by_channel(channel_id: int):
+    return next((vc for vc in bot.voice_clients if vc.channel.id == channel_id), None)
+
+
+def _play_after(channel_id: int, error):
+    if error:
+        log.error(f"[play] Lỗi khi phát: {error}")
+    bot.loop.call_soon_threadsafe(lambda: asyncio.create_task(_play_next_track(channel_id)))
+
+
+async def _play_next_track(channel_id: int):
+    voice_client = get_voice_client_by_channel(channel_id)
+    if not voice_client or not voice_client.is_connected():
+        _song_queues.pop(channel_id, None)
+        _currently_playing.pop(channel_id, None)
+        _queue_text_channels.pop(channel_id, None)
+        return
+
+    queue = _song_queues.get(channel_id, [])
+    if not queue:
+        _currently_playing.pop(channel_id, None)
+        return
+
+    next_track = queue.pop(0)
+    if queue:
+        _song_queues[channel_id] = queue
+    else:
+        _song_queues.pop(channel_id, None)
+
+    try:
+        source = discord.FFmpegPCMAudio(next_track['audio_url'], **music_service.ffmpeg_options)
+        voice_client.play(
+            source,
+            after=lambda error: _play_after(channel_id, error)
+        )
+        _currently_playing[channel_id] = next_track
+
+        text_channel = _queue_text_channels.get(channel_id)
+        if text_channel:
+            await text_channel.send(
+                f"▶️ Đang phát tiếp: **{next_track['title']}**\n\n**Hàng đợi hiện tại:**\n{format_queue(channel_id)}"
+            )
+        else:
+            log.debug(f"[play_after] Không có text channel lưu cho kênh {channel_id}.")
+    except Exception as e:
+        log.error(f"[play_after] Lỗi khi phát bài tiếp theo: {e}", exc_info=True)
+        text_channel = _queue_text_channels.get(channel_id)
+        if text_channel:
+            await text_channel.send(f"Có lỗi khi phát bài tiếp theo: {str(e)}")
+
 
 def get_connected_members(voice_client) -> list:
     """Trả về danh sách các thành viên đang kết nối trong cuộc gọi thoại."""
@@ -681,6 +746,9 @@ async def leave(ctx):
             voice_client.stop()
             log.debug("[leave] Đã dừng phát nhạc.")
         await voice_client.disconnect()
+        _song_queues.pop(voice_client.channel.id, None)
+        _currently_playing.pop(voice_client.channel.id, None)
+        _queue_text_channels.pop(voice_client.channel.id, None)
         log.info("[leave] Đã rời cuộc gọi thoại.")
         await ctx.send("Đã rời cuộc gọi thoại.")
     else:
@@ -721,15 +789,29 @@ async def play(ctx, *, query: str):
             await ctx.send("Không thể lấy đường dẫn audio từ video này.")
             return
 
+        channel_id = voice_client.channel.id
+        _queue_text_channels[channel_id] = ctx.channel
+
         if voice_client.is_playing():
-            log.debug("[play] Đang phát bài khác – dừng lại để phát bài mới.")
-            voice_client.stop()
+            queue = _song_queues.setdefault(channel_id, [])
+            queue.append({
+                'query': query,
+                'title': title,
+                'audio_url': audio_url,
+            })
+            queue_list = format_queue(channel_id)
+            log.info(f"[play] Đã xếp hàng bài mới: '{title}' vào kênh {channel_id}.")
+            await ctx.send(
+                f"⏳ Hiện đang phát nhạc, bài mới đã được thêm vào hàng đợi.\n\n**Hàng đợi:**\n{queue_list}"
+            )
+            return
 
         source = discord.FFmpegPCMAudio(audio_url, **music_service.ffmpeg_options)
         voice_client.play(
             source,
-            after=lambda e: log.error(f"[play] Lỗi khi phát: {e}") if e else log.info("[play] Phát nhạc hoàn tất.")
+            after=lambda error: _play_after(channel_id, error)
         )
+        _currently_playing[channel_id] = {'query': query, 'title': title, 'audio_url': audio_url}
         log.info(f"[play] Đang phát: '{title}'")
         await ctx.send(f"🎶 Đang phát: **{title}**")
     except Exception as e:
