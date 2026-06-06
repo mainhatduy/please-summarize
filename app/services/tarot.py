@@ -2,6 +2,8 @@ import os
 import json
 import logging
 import random
+import time
+import hashlib
 from dataclasses import dataclass
 from google import genai
 from app.core.config import Config
