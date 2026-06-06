@@ -13,6 +13,7 @@ from app.services.taixiu import TaiXiuService
 from app.services.xinkeo import XinKeoService
 from app.services.tarot import TarotService
 from app.services.kinhdich import KinhDichService
+from app.services.tiktok import TikTokService
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -36,6 +37,7 @@ taixiu_service = TaiXiuService()
 xinkeo_service = XinKeoService()
 tarot_service = TarotService()
 kinhdich_service = KinhDichService()
+tiktok_service = TikTokService()
 
 # Cooldown tracker: {user_id: last_used_timestamp}
 _COOLDOWN_SECONDS = 60
@@ -53,6 +55,78 @@ _SEND_JITTER_MAX = 0.8                # delay ngẫu nhiên tối đa giữa cá
 # Theo dõi thời gian bot ở một mình trong voice: {channel_id: alone_since_timestamp}
 _alone_since: dict[int, float] = {}
 _alone_checker_started = False
+
+# Hàng đợi nhạc theo voice channel id
+_song_queues: dict[int, list[dict]] = {}
+_currently_playing: dict[int, dict] = {}
+_queue_text_channels: dict[int, discord.abc.Messageable] = {}
+_skip_requests: set[int] = set()
+
+
+def format_queue(channel_id: int) -> str:
+    queue = _song_queues.get(channel_id, [])
+    if not queue:
+        return "(Không có bài nào trong hàng đợi.)"
+
+    lines = [f"{idx}. {item['title']}" for idx, item in enumerate(queue, start=1)]
+    return "\n".join(lines)
+
+
+def get_voice_client_by_channel(channel_id: int):
+    return next((vc for vc in bot.voice_clients if vc.channel.id == channel_id), None)
+
+
+def _play_after(channel_id: int, error):
+    if error:
+        log.error(f"[play] Lỗi khi phát: {error}")
+
+    if channel_id in _skip_requests:
+        log.debug(f"[play] Bỏ qua callback after do lệnh skip đang xử lý ở kênh {channel_id}.")
+        _skip_requests.discard(channel_id)
+        return
+
+    bot.loop.call_soon_threadsafe(lambda: asyncio.create_task(_play_next_track(channel_id)))
+
+
+async def _play_next_track(channel_id: int):
+    voice_client = get_voice_client_by_channel(channel_id)
+    if not voice_client or not voice_client.is_connected():
+        _song_queues.pop(channel_id, None)
+        _currently_playing.pop(channel_id, None)
+        _queue_text_channels.pop(channel_id, None)
+        return
+
+    queue = _song_queues.get(channel_id, [])
+    if not queue:
+        _currently_playing.pop(channel_id, None)
+        return
+
+    next_track = queue.pop(0)
+    if queue:
+        _song_queues[channel_id] = queue
+    else:
+        _song_queues.pop(channel_id, None)
+
+    try:
+        source = discord.FFmpegPCMAudio(next_track['audio_url'], **music_service.ffmpeg_options)
+        voice_client.play(
+            source,
+            after=lambda error: _play_after(channel_id, error)
+        )
+        _currently_playing[channel_id] = next_track
+
+        text_channel = _queue_text_channels.get(channel_id)
+        if text_channel:
+            await text_channel.send(
+                f"▶️ Đang phát tiếp: **{next_track['title']}**\n\n**Hàng đợi hiện tại:**\n{format_queue(channel_id)}"
+            )
+        else:
+            log.debug(f"[play_after] Không có text channel lưu cho kênh {channel_id}.")
+    except Exception as e:
+        log.error(f"[play_after] Lỗi khi phát bài tiếp theo: {e}", exc_info=True)
+        text_channel = _queue_text_channels.get(channel_id)
+        if text_channel:
+            await text_channel.send(f"Có lỗi khi phát bài tiếp theo: {str(e)}")
 
 
 def get_connected_members(voice_client) -> list:
@@ -131,11 +205,23 @@ async def on_message(message):
     if message.author.bot:
         return
 
+    # Bỏ qua tin nhắn từ chính mình (self-bot)
+    if message.author.id == bot.user.id:
+        return
+
     # Nếu cấu hình CHANNEL_ID, chỉ nhận request từ channel đó
     if Config.CHANNEL_ID is not None and message.channel.id != Config.CHANNEL_ID:
         return
 
     content = message.content
+
+    # ── AUTO-DETECT TIKTOK ────────────────────────────────────────
+    tiktok_url = tiktok_service.detect_tiktok_url(content)
+    if tiktok_url:
+        await handle_tiktok(message, tiktok_url)
+        return  # Đã xử lý TikTok, không cần check command nữa
+    # ──────────────────────────────────────────────────────────────
+
     prefix = bot.command_prefix
 
     # Chỉ xử lý tin nhắn có tiền tố lệnh
@@ -234,6 +320,57 @@ async def _apply_channel_rate_limit(channel_id: int):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# AUTO TIKTOK – DOWNLOAD VIDEO / ẢNH
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def handle_tiktok(message, url: str):
+    """Tự động tải và gửi video/ảnh TikTok khi detect link."""
+    log.info(f"[tiktok] Detected TikTok URL: {url} | channel_id={message.channel.id}")
+    await message.add_reaction("⏳")
+
+    result = None
+    try:
+        result = await tiktok_service.download(url)
+
+        if result.content_type == "video":
+            if result.file_size_mb > 10:
+                await message.channel.send(result.direct_url)
+            else:
+                file = discord.File(result.file_path)
+                await message.channel.send(file=file)
+
+        elif result.content_type == "slideshow":
+            batch_size = 10
+            for i in range(0, len(result.image_paths), batch_size):
+                batch = result.image_paths[i:i + batch_size]
+                files = [discord.File(p) for p in batch]
+                await message.channel.send(files=files)
+                if i + batch_size < len(result.image_paths):
+                    await asyncio.sleep(random.uniform(_SEND_JITTER_MIN, _SEND_JITTER_MAX))
+
+        await message.remove_reaction("⏳", bot.user)
+        await message.add_reaction("✅")
+        log.info(f"[tiktok] Hoàn thành gửi {result.content_type} cho channel {message.channel.id}")
+
+    except Exception as e:
+        log.error(f"[tiktok] Error: {e}", exc_info=True)
+        try:
+            await message.remove_reaction("⏳", bot.user)
+            await message.add_reaction("❌")
+        except Exception:
+            pass
+
+    finally:
+        if result is not None:
+            paths_to_clean = []
+            if result.file_path:
+                paths_to_clean.append(result.file_path)
+            if result.image_paths:
+                paths_to_clean.extend(result.image_paths)
+            tiktok_service.cleanup(*paths_to_clean)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # LỆNH HELP
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -242,6 +379,7 @@ async def help_cmd(ctx):
     """Lệnh: .help – Hiển thị danh sách lệnh"""
     await ctx.send(
         "**📋 Danh sách lệnh:**\n"
+        "🎬 **Auto TikTok:** Paste link TikTok → bot tự gửi video/ảnh\n"
         "`.tomtat [n]` – Tóm tắt n tin nhắn gần nhất (mặc định 50, tối đa 500)\n"
         "`.tomtat_time [giờ]` – Tóm tắt tin nhắn trong n giờ qua (mặc định 1, tối đa 12)\n"
         "`.get_luck` – Roll vận may hôm nay (1 lần/ngày, reset 00:00)\n"
@@ -250,6 +388,8 @@ async def help_cmd(ctx):
         "`.tarot <câu hỏi>` – Xem bói Tarot (1 lá chính, 3 lá phụ)\n"
         "`.rutque <câu hỏi>` (hoặc `.rq`) – Rút quẻ Kinh Dịch\n"
         "`.play <tên bài/link YouTube>` – Phát nhạc trong voice\n"
+        "`.next` – Chuyển sang bài hát tiếp theo trong hàng đợi\n"
+        "`.queue` – Xem danh sách hàng đợi nhạc\n"
         "`.join` – Tham gia cuộc gọi thoại\n"
         "`.leave` / `.stop` – Rời cuộc gọi thoại\n"
         "`.help` – Hiển thị danh sách lệnh này\n"
@@ -673,9 +813,13 @@ async def leave(ctx):
     voice_client = discord.utils.get(bot.voice_clients, channel=ctx.channel)
     if voice_client and voice_client.is_connected():
         if voice_client.is_playing():
+            _skip_requests.add(voice_client.channel.id)
             voice_client.stop()
             log.debug("[leave] Đã dừng phát nhạc.")
         await voice_client.disconnect()
+        _song_queues.pop(voice_client.channel.id, None)
+        _currently_playing.pop(voice_client.channel.id, None)
+        _queue_text_channels.pop(voice_client.channel.id, None)
         log.info("[leave] Đã rời cuộc gọi thoại.")
         await ctx.send("Đã rời cuộc gọi thoại.")
     else:
@@ -716,20 +860,108 @@ async def play(ctx, *, query: str):
             await ctx.send("Không thể lấy đường dẫn audio từ video này.")
             return
 
+        channel_id = voice_client.channel.id
+        _queue_text_channels[channel_id] = ctx.channel
+
         if voice_client.is_playing():
-            log.debug("[play] Đang phát bài khác – dừng lại để phát bài mới.")
-            voice_client.stop()
+            queue = _song_queues.setdefault(channel_id, [])
+            queue.append({
+                'query': query,
+                'title': title,
+                'audio_url': audio_url,
+            })
+            queue_list = format_queue(channel_id)
+            log.info(f"[play] Đã xếp hàng bài mới: '{title}' vào kênh {channel_id}.")
+            await ctx.send(
+                f"⏳ Hiện đang phát nhạc, bài mới đã được thêm vào hàng đợi.\n\n**Hàng đợi:**\n{queue_list}"
+            )
+            return
 
         source = discord.FFmpegPCMAudio(audio_url, **music_service.ffmpeg_options)
         voice_client.play(
             source,
-            after=lambda e: log.error(f"[play] Lỗi khi phát: {e}") if e else log.info("[play] Phát nhạc hoàn tất.")
+            after=lambda error: _play_after(channel_id, error)
         )
+        _currently_playing[channel_id] = {'query': query, 'title': title, 'audio_url': audio_url}
         log.info(f"[play] Đang phát: '{title}'")
         await ctx.send(f"🎶 Đang phát: **{title}**")
     except Exception as e:
         log.error(f"[play] Lỗi không mong muốn: {e}", exc_info=True)
         await ctx.send(f"Có lỗi xảy ra khi phát nhạc: {str(e)}")
+
+
+@bot.command(name="next", aliases=["skip"])
+async def next_track(ctx):
+    """Lệnh: .next (hoặc .skip) – Chuyển sang bài hát tiếp theo trong hàng đợi"""
+    log.info(f"[next] Yêu cầu chuyển bài kế tiếp | channel_id={ctx.channel.id}")
+    
+    voice_client = discord.utils.get(bot.voice_clients, channel=ctx.channel)
+    if not voice_client or not voice_client.is_connected():
+        log.warning("[next] Bot không ở trong cuộc gọi thoại nào.")
+        await ctx.send("❌ Bot không ở trong cuộc gọi thoại nào. Hãy dùng `.play` để phát nhạc trước.")
+        return
+    
+    if not voice_client.is_playing():
+        log.warning("[next] Không có bài hát nào đang phát.")
+        await ctx.send("❌ Không có bài hát nào đang phát. Hãy dùng `.play` để phát nhạc trước.")
+        return
+    
+    channel_id = voice_client.channel.id
+    queue = _song_queues.get(channel_id, [])
+    
+    if not queue:
+        log.info(f"[next] Không có bài kế tiếp trong hàng đợi của kênh {channel_id}.")
+        await ctx.send("❌ Không có bài kế tiếp trong hàng đợi.")
+        return
+    
+    # Chỉ peek bài tiếp theo để thông báo, KHÔNG pop — để _play_next_track tự xử lý
+    next_song_title = queue[0]['title']
+    log.info(f"[next] Đang skip bài hiện tại, bài tiếp theo sẽ là: '{next_song_title}'")
+    
+    await ctx.send(
+        f"⏭️ Bỏ qua bài hiện tại, chuyển sang: **{next_song_title}**"
+    )
+    
+    # Dừng bài hiện tại — callback _play_after sẽ tự gọi _play_next_track
+    # để pop bài tiếp theo từ queue và phát, tránh race condition double-pop
+    voice_client.stop()
+
+
+@bot.command(name="queue")
+async def show_queue(ctx):
+    """Lệnh: .queue – Xem danh sách hàng đợi nhạc hiện tại"""
+    log.info(f"[queue] Yêu cầu xem hàng đợi | channel_id={ctx.channel.id}")
+    
+    voice_client = discord.utils.get(bot.voice_clients, channel=ctx.channel)
+    if not voice_client or not voice_client.is_connected():
+        log.warning("[queue] Bot không ở trong cuộc gọi thoại nào.")
+        await ctx.send("❌ Bot không ở trong cuộc gọi thoại nào.")
+        return
+    
+    channel_id = voice_client.channel.id
+    currently = _currently_playing.get(channel_id)
+    queue = _song_queues.get(channel_id, [])
+    
+    if not currently and not queue:
+        log.info("[queue] Không có bài nào đang phát hoặc trong hàng đợi.")
+        await ctx.send("Không có bài hát nào đang phát hoặc trong hàng đợi.")
+        return
+    
+    # Format response
+    text = "🎵 **Danh sách phát nhạc:**\n\n"
+    
+    if currently:
+        text += f"▶️ **Đang phát:** {currently['title']}\n"
+    
+    if queue:
+        text += "\n**📜 Hàng đợi:**\n"
+        text += format_queue(channel_id)
+    else:
+        if currently:
+            text += "\n*(Không có bài nào trong hàng đợi)*"
+    
+    log.info(f"[queue] Gửi danh sách hàng đợi với {len(queue)} bài")
+    await ctx.send(text)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
