@@ -12,6 +12,7 @@ from app.services.fortune import FortuneService
 from app.services.taixiu import TaiXiuService
 from app.services.xinkeo import XinKeoService
 from app.services.tarot import TarotService
+from app.services.kinhdich import KinhDichService
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -34,6 +35,7 @@ fortune_service = FortuneService()
 taixiu_service = TaiXiuService()
 xinkeo_service = XinKeoService()
 tarot_service = TarotService()
+kinhdich_service = KinhDichService()
 
 # Cooldown tracker: {user_id: last_used_timestamp}
 _COOLDOWN_SECONDS = 60
@@ -246,6 +248,7 @@ async def help_cmd(ctx):
         "`.taixiu` (hoặc `.tx`) – Chơi Tài Xỉu 3 xúc xắc (kèm chẵn lẻ)\n"
         "`.xinkeo <lời khấn>` (hoặc `.xk`) – Xin keo truyền thống\n"
         "`.tarot <câu hỏi>` – Xem bói Tarot (1 lá chính, 3 lá phụ)\n"
+        "`.rutque <câu hỏi>` (hoặc `.rq`) – Rút quẻ Kinh Dịch\n"
         "`.play <tên bài/link YouTube>` – Phát nhạc trong voice\n"
         "`.join` – Tham gia cuộc gọi thoại\n"
         "`.leave` / `.stop` – Rời cuộc gọi thoại\n"
@@ -577,6 +580,64 @@ async def tarot(ctx, *, question: str = ""):
         await wait_msg.edit(content=final_text)
         
     log.info(f"[tarot] Hoàn thành đọc Tarot cho {ctx.author.name}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RÚT QUẺ KINH DỊCH
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bot.command(name="rutque", aliases=["rq", "kinhdich"])
+async def rutque(ctx, *, question: str = ""):
+    """Lệnh: .rutque <câu hỏi> – Rút quẻ Kinh Dịch và luận giải"""
+    log.info(f"[rutque] Yêu cầu rút quẻ | author={ctx.author} | question='{question}' | channel_id={ctx.channel.id}")
+    if not question.strip():
+        await ctx.send("☰ Vui lòng nhập câu hỏi của bạn. Ví dụ: `.rutque Hôm nay tôi có nên đầu tư không?`")
+        return
+
+    wait_msg = await ctx.send(
+        f"☰ **{ctx.author.name}** đang hỏi: *\"{question}\"*\n"
+        f"*Đang thành tâm rút quẻ Kinh Dịch...*"
+    )
+
+    # Rút quẻ
+    hexagram = kinhdich_service.draw_hexagram(question)
+    hex_text = kinhdich_service.format_hexagram_text(hexagram)
+
+    # Hiển thị quẻ đã rút, chờ luận giải
+    drawn_text = (
+        f"☰ **Quẻ Kinh Dịch của {ctx.author.name}**\n"
+        f"**Câu hỏi:** *\"{question}\"*\n\n"
+        f"{hex_text}\n"
+        f"*Đang luận giải quẻ dịch...*"
+    )
+    await wait_msg.edit(content=drawn_text)
+
+    # Sinh luận giải bằng Gemini
+    loop = asyncio.get_event_loop()
+    reading = await loop.run_in_executor(
+        None, kinhdich_service.generate_reading, question, hexagram, ctx.author.name
+    )
+
+    final_text = (
+        f"☰ **QUẺ KINH DỊCH**\n"
+        f"**Người hỏi:** {ctx.author.name}\n"
+        f"**Câu hỏi:** *\"{question}\"*\n\n"
+        f"{hex_text}\n"
+        f"**📜 Lời Luận Giải:**\n{reading}"
+    )
+
+    # Chia nhỏ nếu vượt giới hạn Discord
+    if len(final_text) > 1900:
+        await wait_msg.delete()
+        await send_long(ctx, final_text)
+    else:
+        await wait_msg.edit(content=final_text)
+
+    # Gửi hình minh họa quẻ dịch
+    image_url = f"https://dich.kabala.vn/img/bai-kinh-dich/{hexagram['so']}.png"
+    await ctx.send(image_url)
+
+    log.info(f"[rutque] Hoàn thành rút quẻ cho {ctx.author.name}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
