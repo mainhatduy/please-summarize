@@ -684,7 +684,7 @@ async def tarot(ctx, *, question: str = ""):
     )
 
     # Rút bài với seed từ câu hỏi và thời gian hiện tại
-    draw_result = tarot_service.draw_cards(question)
+    draw_result = tarot_service.draw_cards()
     
     # Render tên bài đang rút (hiệu ứng)
     def fmt_card(c):
