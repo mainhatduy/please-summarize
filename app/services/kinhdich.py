@@ -713,7 +713,7 @@ class KinhDichService:
 
             f"Dựa vào triết lý của quẻ dịch này, ngũ hành tương sinh/tương khắc và tình huống của người dùng, "
             f"bạn BẮT BUỘC PHẢI CHỌN ĐÚNG MỘT (1) lựa chọn tốt nhất trong số các lựa chọn mà người dùng đưa ra.\n\n"
-            
+
             f"Trả lời cực kỳ ngắn gọn theo đúng định dạng sau:\n\n"
 
             f"**Lựa chọn:**\n"
@@ -735,4 +735,3 @@ class KinhDichService:
         except Exception as e:
             log.error(f"[kinhdich] Lỗi khi gọi Gemini: {e}", exc_info=True)
             return "Đã có lỗi xảy ra khi luận giải quẻ dịch (Lỗi AI). Xin hãy thử lại sau."
-
