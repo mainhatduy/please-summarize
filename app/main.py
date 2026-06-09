@@ -61,6 +61,7 @@ _song_queues: dict[int, list[dict]] = {}
 _currently_playing: dict[int, dict] = {}
 _queue_text_channels: dict[int, discord.abc.Messageable] = {}
 _skip_requests: set[int] = set()
+_queue_messages: dict[int, discord.Message] = {}  # Lưu tin nhắn queue cuối cùng để edit
 
 
 def format_queue(channel_id: int) -> str:
@@ -70,6 +71,56 @@ def format_queue(channel_id: int) -> str:
 
     lines = [f"{idx}. {item['title']}" for idx, item in enumerate(queue, start=1)]
     return "\n".join(lines)
+
+
+def _build_queue_text(channel_id: int, header: str = "") -> str:
+    """Tạo nội dung text đầy đủ cho tin nhắn queue (bài đang phát + hàng đợi)."""
+    currently = _currently_playing.get(channel_id)
+    queue = _song_queues.get(channel_id, [])
+
+    parts = []
+    if header:
+        parts.append(header)
+    parts.append("")
+    parts.append("🎵 **Danh sách phát nhạc:**")
+    parts.append("")
+    if currently:
+        parts.append(f"▶️ **Đang phát:** {currently['title']}")
+    if queue:
+        parts.append("")
+        parts.append("**📜 Hàng đợi:**")
+        parts.append(format_queue(channel_id))
+    elif currently:
+        parts.append("")
+        parts.append("*(Không có bài nào trong hàng đợi)*")
+    return "\n".join(parts)
+
+
+async def _update_queue_message(channel_id: int, header: str = ""):
+    """Edit tin nhắn queue cuối cùng. Nếu không tìm thấy thì gửi tin nhắn mới."""
+    text_channel = _queue_text_channels.get(channel_id)
+    if not text_channel:
+        log.debug(f"[queue_msg] Không có text channel lưu cho kênh {channel_id}.")
+        return
+
+    content = _build_queue_text(channel_id, header)
+    existing_msg = _queue_messages.get(channel_id)
+
+    if existing_msg:
+        try:
+            await existing_msg.edit(content=content)
+            log.debug(f"[queue_msg] Đã edit tin nhắn queue cho kênh {channel_id}.")
+            return
+        except Exception as e:
+            log.warning(f"[queue_msg] Không thể edit tin nhắn cũ: {e}. Sẽ gửi tin nhắn mới.")
+
+    # Fallback: gửi tin nhắn mới nếu edit thất bại hoặc chưa có
+    try:
+        msg = await text_channel.send(content)
+        _queue_messages[channel_id] = msg
+        log.debug(f"[queue_msg] Đã gửi tin nhắn queue mới cho kênh {channel_id}.")
+    except Exception as e:
+        log.error(f"[queue_msg] Lỗi khi gửi tin nhắn queue: {e}", exc_info=True)
 
 
 def get_voice_client_by_channel(channel_id: int):
@@ -94,6 +145,7 @@ async def _play_next_track(channel_id: int):
         _song_queues.pop(channel_id, None)
         _currently_playing.pop(channel_id, None)
         _queue_text_channels.pop(channel_id, None)
+        _queue_messages.pop(channel_id, None)
         return
 
     queue = _song_queues.get(channel_id, [])
@@ -115,13 +167,8 @@ async def _play_next_track(channel_id: int):
         )
         _currently_playing[channel_id] = next_track
 
-        text_channel = _queue_text_channels.get(channel_id)
-        if text_channel:
-            await text_channel.send(
-                f"▶️ Đang phát tiếp: **{next_track['title']}**\n\n**Hàng đợi hiện tại:**\n{format_queue(channel_id)}"
-            )
-        else:
-            log.debug(f"[play_after] Không có text channel lưu cho kênh {channel_id}.")
+        # Edit tin nhắn queue cuối cùng thay vì gửi mới
+        await _update_queue_message(channel_id, header=f"▶️ Đang phát tiếp: **{next_track['title']}**")
     except Exception as e:
         log.error(f"[play_after] Lỗi khi phát bài tiếp theo: {e}", exc_info=True)
         text_channel = _queue_text_channels.get(channel_id)
@@ -879,6 +926,7 @@ async def leave(ctx):
         _song_queues.pop(voice_client.channel.id, None)
         _currently_playing.pop(voice_client.channel.id, None)
         _queue_text_channels.pop(voice_client.channel.id, None)
+        _queue_messages.pop(voice_client.channel.id, None)
         log.info("[leave] Đã rời cuộc gọi thoại.")
         await ctx.send("Đã rời cuộc gọi thoại.")
     else:
@@ -905,11 +953,16 @@ async def play(ctx, *, query: str):
             await ctx.send(f"Không thể kết nối vào cuộc gọi thoại để phát nhạc: {str(e)}")
             return
 
-    await ctx.send(f"Đang tìm kiếm bài hát: `{query}`...")
+    search_msg = await ctx.send(f"Đang tìm kiếm bài hát: `{query}`...")
 
     try:
         log.debug(f"[play] Đang trích xuất thông tin từ yt-dlp cho query='{query}'...")
         info = await music_service.extract_info(query)
+        # Xóa tin nhắn tìm kiếm sau khi có kết quả
+        try:
+            await search_msg.delete()
+        except Exception:
+            pass
         audio_url = info.get('url')
         title = info.get('title', 'Không rõ tiêu đề')
         log.info(f"[play] Tìm thấy bài: '{title}'")
@@ -929,11 +982,9 @@ async def play(ctx, *, query: str):
                 'title': title,
                 'audio_url': audio_url,
             })
-            queue_list = format_queue(channel_id)
             log.info(f"[play] Đã xếp hàng bài mới: '{title}' vào kênh {channel_id}.")
-            await ctx.send(
-                f"⏳ Hiện đang phát nhạc, bài mới đã được thêm vào hàng đợi.\n\n**Hàng đợi:**\n{queue_list}"
-            )
+            # Edit tin nhắn queue cuối cùng thay vì gửi mới
+            await _update_queue_message(channel_id, header=f"⏳ Đã thêm vào hàng đợi: **{title}**")
             return
 
         source = discord.FFmpegPCMAudio(audio_url, **music_service.ffmpeg_options)
@@ -943,7 +994,8 @@ async def play(ctx, *, query: str):
         )
         _currently_playing[channel_id] = {'query': query, 'title': title, 'audio_url': audio_url}
         log.info(f"[play] Đang phát: '{title}'")
-        await ctx.send(f"🎶 Đang phát: **{title}**")
+        # Gửi tin nhắn queue mới khi bắt đầu phát bài đầu tiên
+        await _update_queue_message(channel_id, header=f"🎶 Đang phát: **{title}**")
     except Exception as e:
         log.error(f"[play] Lỗi không mong muốn: {e}", exc_info=True)
         await ctx.send(f"Có lỗi xảy ra khi phát nhạc: {str(e)}")
@@ -977,12 +1029,9 @@ async def next_track(ctx):
     next_song_title = queue[0]['title']
     log.info(f"[next] Đang skip bài hiện tại, bài tiếp theo sẽ là: '{next_song_title}'")
     
-    await ctx.send(
-        f"⏭️ Bỏ qua bài hiện tại, chuyển sang: **{next_song_title}**"
-    )
-    
     # Dừng bài hiện tại — callback _play_after sẽ tự gọi _play_next_track
     # để pop bài tiếp theo từ queue và phát, tránh race condition double-pop
+    # _play_next_track sẽ tự edit tin nhắn queue
     voice_client.stop()
 
 
@@ -1006,21 +1055,12 @@ async def show_queue(ctx):
         await ctx.send("Không có bài hát nào đang phát hoặc trong hàng đợi.")
         return
     
-    # Format response
-    text = "🎵 **Danh sách phát nhạc:**\n\n"
+    # .queue luôn gửi tin nhắn MỚI và lưu reference để các lần update sau edit vào đây
+    text = _build_queue_text(channel_id)
+    msg = await ctx.send(text)
+    _queue_messages[channel_id] = msg
     
-    if currently:
-        text += f"▶️ **Đang phát:** {currently['title']}\n"
-    
-    if queue:
-        text += "\n**📜 Hàng đợi:**\n"
-        text += format_queue(channel_id)
-    else:
-        if currently:
-            text += "\n*(Không có bài nào trong hàng đợi)*"
-    
-    log.info(f"[queue] Gửi danh sách hàng đợi với {len(queue)} bài")
-    await ctx.send(text)
+    log.info(f"[queue] Gửi danh sách hàng đợi mới với {len(queue)} bài")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
