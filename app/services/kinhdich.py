@@ -683,3 +683,56 @@ class KinhDichService:
         except Exception as e:
             log.error(f"[kinhdich] Lỗi khi gọi Gemini: {e}", exc_info=True)
             return "Đã có lỗi xảy ra khi luận giải quẻ dịch (Lỗi AI). Xin hãy thử lại sau."
+
+    def generate_choice_reading(self, question_and_choices: str, hexagram: dict, user_name: str) -> str:
+        """Gọi Gemini để quyết định một lựa chọn duy nhất dựa trên quẻ dịch."""
+        h = hexagram
+
+        # Fetch thông tin chi tiết từ kabala.vn
+        slug = h.get("slug", "")
+        detail_text = self.fetch_detail(slug) if slug else ""
+
+        detail_section = ""
+        if detail_text:
+            detail_section = (
+                f"\n=== THÔNG TIN CHI TIẾT TỪ KINH DỊCH CỔ ĐIỂN ===\n"
+                f"{detail_text}\n"
+                f"=== HẾT THÔNG TIN CHI TIẾT ===\n\n"
+            )
+
+        prompt = (
+            f"Bạn là một bậc thầy Kinh Dịch uyên bác. "
+            f"Người dùng '{user_name}' đang phân vân và đưa ra câu hỏi cùng các lựa chọn sau: \"{question_and_choices}\"\n\n"
+
+            f"Quẻ đã rút:\n"
+            f"- Quẻ số: {h['so']} - {h['ten']} ({h['ten_ngan']} - {h['han_tu']})\n"
+            f"- Tượng quẻ: {h['ngoai_quai']} / {h['noi_quai']}\n"
+            f"- Ngũ hành: {h['ngu_hanh']}, Mức: {h['muc']}\n"
+            f"- Triệu: {h['trieu']}\n"
+            f"{detail_section}"
+
+            f"Dựa vào triết lý của quẻ dịch này, ngũ hành tương sinh/tương khắc và tình huống của người dùng, "
+            f"bạn BẮT BUỘC PHẢI CHỌN ĐÚNG MỘT (1) lựa chọn tốt nhất trong số các lựa chọn mà người dùng đưa ra.\n\n"
+            
+            f"Trả lời cực kỳ ngắn gọn theo đúng định dạng sau:\n\n"
+
+            f"**Lựa chọn:**\n"
+            f"(Chỉ ghi rõ ràng MỘT lựa chọn mà bạn quyết định chọn)\n\n"
+
+            f"**Lý giải từ quẻ dịch:**\n"
+            f"(Giải thích tại sao lựa chọn đó là phù hợp nhất, dựa vào ý nghĩa của quẻ {h['ten']} và hoàn cảnh của người hỏi)\n\n"
+
+            f"Yêu cầu đặc biệt: Trả lời hoàn toàn bằng tiếng Việt, tuyệt đối không được nói nước đôi hay né tránh việc chọn."
+        )
+
+        try:
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+            )
+            result = response.text.strip() if response.text else ""
+            return result or "Quẻ dịch đang ẩn mình, xin hãy thử lại sau..."
+        except Exception as e:
+            log.error(f"[kinhdich] Lỗi khi gọi Gemini: {e}", exc_info=True)
+            return "Đã có lỗi xảy ra khi luận giải quẻ dịch (Lỗi AI). Xin hãy thử lại sau."
+
