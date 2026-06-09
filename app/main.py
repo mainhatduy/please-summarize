@@ -656,7 +656,7 @@ async def xinkeo(ctx, *, wish: str = ""):
     
     result_text = (
         f"🙏 **Quẻ Xin Keo**\n"
-        f"**Người cầu:** {ctx.author.name}\n"
+        f"**Người cầu:** {ctx.author.mention}\n"
         f"**Tâm nguyện:** *\"{wish}\"*\n"
         f"**Quẻ gieo:** {icon1} {icon2} ({result_type})\n\n"
         f"**Lời luận giải:**\n{luan_giai}"
@@ -706,7 +706,7 @@ async def tarot(ctx, *, question: str = ""):
     
     final_text = (
         f"🔮 **TRẢI BÀI TAROT**\n"
-        f"**Người xem:** {ctx.author.name}\n"
+        f"**Người xem:** {ctx.author.mention}\n"
         f"**Câu hỏi:** *\"{question}\"*\n\n"
         f"✨ **Lá bài chính (Key):** {fmt_card(draw_result['key_card'])}\n"
         f"🃏 **Lá bài phụ (Support):** " + ", ".join(fmt_card(c) for c in draw_result["supporting_cards"]) + "\n\n"
@@ -761,7 +761,7 @@ async def rutque(ctx, *, question: str = ""):
 
     final_text = (
         f"☰ **QUẺ KINH DỊCH**\n"
-        f"**Người hỏi:** {ctx.author.name}\n"
+        f"**Người hỏi:** {ctx.author.mention}\n"
         f"**Câu hỏi:** *\"{question}\"*\n\n"
         f"{hex_text}\n"
         f"**📜 Lời Luận Giải:**\n{reading}"
@@ -773,10 +773,6 @@ async def rutque(ctx, *, question: str = ""):
         await send_long(ctx, final_text)
     else:
         await wait_msg.edit(content=final_text)
-
-    # Gửi hình minh họa quẻ dịch
-    image_url = f"https://dich.kabala.vn/img/bai-kinh-dich/{hexagram['so']}.png"
-    await ctx.send(image_url)
 
     log.info(f"[rutque] Hoàn thành rút quẻ cho {ctx.author.name}")
 
@@ -819,7 +815,7 @@ async def luachon(ctx, *, question_and_choices: str = ""):
 
     final_text = (
         f"☰ **QUYẾT ĐỊNH TỪ KINH DỊCH**\n"
-        f"**Người hỏi:** {ctx.author.name}\n"
+        f"**Người hỏi:** {ctx.author.mention}\n"
         f"**Phân vân:** *\"{question_and_choices}\"*\n\n"
         f"{hex_text}\n"
         f"{reading}"
@@ -831,10 +827,6 @@ async def luachon(ctx, *, question_and_choices: str = ""):
         await send_long(ctx, final_text)
     else:
         await wait_msg.edit(content=final_text)
-
-    # Gửi hình minh họa quẻ dịch
-    image_url = f"https://dich.kabala.vn/img/bai-kinh-dich/{hexagram['so']}.png"
-    await ctx.send(image_url)
 
     log.info(f"[luachon] Hoàn thành lựa chọn cho {ctx.author.name}")
 
