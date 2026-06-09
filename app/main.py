@@ -387,6 +387,7 @@ async def help_cmd(ctx):
         "`.xinkeo <lời khấn>` (hoặc `.xk`) – Xin keo truyền thống\n"
         "`.tarot <câu hỏi>` – Xem bói Tarot (1 lá chính, 3 lá phụ)\n"
         "`.rutque <câu hỏi>` (hoặc `.rq`) – Rút quẻ Kinh Dịch\n"
+        "`.luachon <câu hỏi và các lựa chọn>` (hoặc `.lc`) – Kinh Dịch đưa ra quyết định\n"
         "`.play <tên bài/link YouTube>` – Phát nhạc trong voice\n"
         "`.next` – Chuyển sang bài hát tiếp theo trong hàng đợi\n"
         "`.queue` – Xem danh sách hàng đợi nhạc\n"
@@ -778,6 +779,64 @@ async def rutque(ctx, *, question: str = ""):
     await ctx.send(image_url)
 
     log.info(f"[rutque] Hoàn thành rút quẻ cho {ctx.author.name}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LỰA CHỌN KINH DỊCH
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bot.command(name="luachon", aliases=["lc", "chon"])
+async def luachon(ctx, *, question_and_choices: str = ""):
+    """Lệnh: .luachon <câu hỏi và các lựa chọn> – Nhờ quẻ Kinh Dịch quyết định lựa chọn"""
+    log.info(f"[luachon] Yêu cầu lựa chọn | author={ctx.author} | question='{question_and_choices}' | channel_id={ctx.channel.id}")
+    if not question_and_choices.strip():
+        await ctx.send("☰ Vui lòng nhập câu hỏi và các lựa chọn. Ví dụ: `.luachon Trưa nay ăn gì? Phở hay Cơm tấm?`")
+        return
+
+    wait_msg = await ctx.send(
+        f"☰ **{ctx.author.name}** đang phân vân: *\"{question_and_choices}\"*\n"
+        f"*Đang rút quẻ Kinh Dịch để tìm ra lựa chọn tốt nhất...*"
+    )
+
+    # Rút quẻ
+    hexagram = kinhdich_service.draw_hexagram(question_and_choices)
+    hex_text = kinhdich_service.format_hexagram_text(hexagram)
+
+    # Hiển thị quẻ đã rút, chờ luận giải
+    drawn_text = (
+        f"☰ **Quẻ Kinh Dịch của {ctx.author.name}**\n"
+        f"**Phân vân:** *\"{question_and_choices}\"*\n\n"
+        f"{hex_text}\n"
+        f"*Đang xin lời khuyên từ cõi tâm linh để đưa ra quyết định...*"
+    )
+    await wait_msg.edit(content=drawn_text)
+
+    # Sinh luận giải bằng Gemini
+    loop = asyncio.get_event_loop()
+    reading = await loop.run_in_executor(
+        None, kinhdich_service.generate_choice_reading, question_and_choices, hexagram, ctx.author.name
+    )
+
+    final_text = (
+        f"☰ **QUYẾT ĐỊNH TỪ KINH DỊCH**\n"
+        f"**Người hỏi:** {ctx.author.name}\n"
+        f"**Phân vân:** *\"{question_and_choices}\"*\n\n"
+        f"{hex_text}\n"
+        f"{reading}"
+    )
+
+    # Chia nhỏ nếu vượt giới hạn Discord
+    if len(final_text) > 1900:
+        await wait_msg.delete()
+        await send_long(ctx, final_text)
+    else:
+        await wait_msg.edit(content=final_text)
+
+    # Gửi hình minh họa quẻ dịch
+    image_url = f"https://dich.kabala.vn/img/bai-kinh-dich/{hexagram['so']}.png"
+    await ctx.send(image_url)
+
+    log.info(f"[luachon] Hoàn thành lựa chọn cho {ctx.author.name}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
