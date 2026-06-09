@@ -4,3 +4,5 @@ __pycache__
 venv
 .venv
 app/database/fortune_history.json
+*.ipynb
+draft
