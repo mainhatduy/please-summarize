@@ -821,10 +821,6 @@ async def rutque(ctx, *, question: str = ""):
     else:
         await wait_msg.edit(content=final_text)
 
-    # Gửi hình minh họa quẻ dịch
-    image_url = f"https://dich.kabala.vn/img/bai-kinh-dich/{hexagram['so']}.png"
-    await ctx.send(image_url)
-
     log.info(f"[rutque] Hoàn thành rút quẻ cho {ctx.author.name}")
 
 
