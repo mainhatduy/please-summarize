@@ -203,7 +203,7 @@ class TarotService:
             
         return "\n".join(context_parts)
 
-    def generate_reading(self, question: str, draw_result: dict, user_name: str) -> str:
+    def generate_reading(self, question: str, draw_result: dict, user_name: str, memory_context: str = "") -> str:
         """Sử dụng Gemini để luận giải các lá bài dựa trên câu hỏi và tên người cầu."""
         if not draw_result:
             return "Đã xảy ra lỗi khi rút bài. Xin hãy thử lại sau."
@@ -236,6 +236,7 @@ class TarotService:
         prompt = (
             f"Người cầu: {user_name}\n"
             f"Câu hỏi: '{question}'\n"
+            f"{self._memory_prompt(memory_context)}"
             f"Lá chính: {key_str}\n"
             f"3 lá phụ: {supp_str}\n\n"
             
@@ -276,3 +277,13 @@ class TarotService:
         except Exception as e:
             log.error(f"[tarot] Lỗi khi gọi Gemini: {e}", exc_info=True)
             return "Đã có lỗi xảy ra khi kết nối với cõi tâm linh (Lỗi AI). Xin hãy thử lại sau."
+
+    @staticmethod
+    def _memory_prompt(memory_context: str) -> str:
+        if not memory_context.strip():
+            return ""
+        return (
+            "Ngữ cảnh đã nhớ trong 2 ngày gần đây của kênh này:\n"
+            f"{memory_context.strip()}\n"
+            "Hãy dùng ngữ cảnh này để hiểu tình huống của người hỏi sát hơn, nhưng không bịa thêm dữ kiện.\n\n"
+        )

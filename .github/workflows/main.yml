@@ -28,6 +28,7 @@ jobs:
             docker run -d \
               --name discord-bot \
               --env-file .env \
+              -v discord-bot-data:/data \
               -e TZ=Asia/Ho_Chi_Minh \
               --restart unless-stopped \
               discord-summarizer-bot

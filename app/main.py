@@ -19,6 +19,7 @@ from app.services.xinkeo import XinKeoService
 from app.services.tarot import TarotService
 from app.services.kinhdich import KinhDichService
 from app.services.tiktok import TikTokService
+from app.services.memory import MemoryService
 
 # ── Webhook Logging ───────────────────────────────────────────────────────────
 log_queue = queue.Queue()
@@ -83,6 +84,7 @@ xinkeo_service = XinKeoService()
 tarot_service = TarotService()
 kinhdich_service = KinhDichService()
 tiktok_service = TikTokService()
+memory_service = MemoryService()
 
 # Cooldown tracker: {user_id: last_used_timestamp}
 _COOLDOWN_SECONDS = 60
@@ -383,6 +385,22 @@ async def send_long(ctx, text: str, chunk_size: int = 1900):
             await asyncio.sleep(delay)
 
 
+def _get_memory_context(channel_id: int) -> str:
+    try:
+        return memory_service.get_context(channel_id)
+    except Exception as e:
+        log.error(f"[memory] Không thể đọc memory cho channel {channel_id}: {e}", exc_info=True)
+        return ""
+
+
+async def _remember_context(channel_id: int, command_name: str, new_context: str):
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, memory_service.update, channel_id, new_context, command_name)
+    except Exception as e:
+        log.error(f"[memory] Không thể cập nhật memory cho channel {channel_id}: {e}", exc_info=True)
+
+
 def _check_cooldown(user_id: int) -> float | None:
     """Kiểm tra cooldown. Trả về số giây còn lại nếu đang cooldown, None nếu OK."""
     now = time.monotonic()
@@ -586,10 +604,16 @@ async def tomtat(ctx, *args):
         + "\nĐang gọi Gemini..."
     )
 
-    summary = summarize_service.summarize(messages)
+    memory_context = _get_memory_context(ctx.channel.id)
+    summary = summarize_service.summarize(messages, memory_context=memory_context)
 
     log.info(f"[tomtat] Gemini trả về kết quả ({len(summary)} ký tự) – đang gửi...")
     await send_long(ctx, f"**Tóm tắt:**\n{summary}")
+    await _remember_context(
+        ctx.channel.id,
+        "tomtat",
+        "Tin nhắn mới:\n" + "\n".join(messages[-120:]) + f"\n\nTóm tắt vừa tạo:\n{summary}",
+    )
     log.info("[tomtat] Hoàn thành.")
 
 
@@ -690,10 +714,16 @@ async def tomtat_time(ctx, *args):
         + "\nĐang gọi Gemini..."
     )
 
-    summary = summarize_service.summarize(messages)
+    memory_context = _get_memory_context(ctx.channel.id)
+    summary = summarize_service.summarize(messages, memory_context=memory_context)
 
     log.info(f"[tomtat_time] Gemini trả về kết quả ({len(summary)} ký tự) – đang gửi...")
     await send_long(ctx, f"**Tóm tắt:**\n{summary}")
+    await _remember_context(
+        ctx.channel.id,
+        "tomtat_time",
+        "Tin nhắn mới:\n" + "\n".join(messages[-120:]) + f"\n\nTóm tắt vừa tạo:\n{summary}",
+    )
     log.info("[tomtat_time] Hoàn thành.")
 
 
@@ -723,7 +753,8 @@ async def get_luck(ctx):
     user_messages.reverse()  # cũ → mới
     log.info(f"[get_luck] Thu thập {len(user_messages)} tin nhắn của {ctx.author} để gửi Gemini.")
 
-    result = fortune_service.roll(ctx.author.id, messages=user_messages)
+    memory_context = _get_memory_context(ctx.channel.id)
+    result = fortune_service.roll(ctx.author.id, messages=user_messages, memory_context=memory_context)
 
     if result.already_rolled:
         log.info(f"[get_luck] User {ctx.author} đã roll hôm nay rồi.")
@@ -765,6 +796,13 @@ async def get_luck(ctx):
         f"{result.fortune_msg}\n"
     )
     await ctx.send(text)
+    await _remember_context(
+        ctx.channel.id,
+        "get_luck",
+        f"Người dùng {ctx.author.name} roll vận may: {tier.label}, {result.animal}.\n"
+        f"Lời bình: {result.fortune_msg}\n"
+        f"Tin nhắn gần đây của họ:\n" + "\n".join(user_messages[-40:]),
+    )
     log.info("[get_luck] Hoàn thành.")
 
 
@@ -806,7 +844,8 @@ async def xinkeo(ctx, *, wish: str = ""):
     )
 
     loop = asyncio.get_event_loop()
-    luan_giai = await loop.run_in_executor(None, xinkeo_service.generate_luan_giai, wish, roll_result)
+    memory_context = _get_memory_context(ctx.channel.id)
+    luan_giai = await loop.run_in_executor(None, xinkeo_service.generate_luan_giai, wish, roll_result, memory_context)
 
     result_type = roll_result["result"]
     icon1 = roll_result["icon1"]
@@ -822,6 +861,11 @@ async def xinkeo(ctx, *, wish: str = ""):
     
     
     await wait_msg.edit(content=result_text)
+    await _remember_context(
+        ctx.channel.id,
+        "xinkeo",
+        f"{ctx.author.name} xin keo với tâm nguyện: {wish}\nKết quả: {result_type}\nLuận giải: {luan_giai}",
+    )
     log.info(f"[xinkeo] Hoàn thành gieo keo cho {ctx.author.name}: {result_type}")
 
 
@@ -860,7 +904,8 @@ async def tarot(ctx, *, question: str = ""):
     
     # Sinh luận giải
     loop = asyncio.get_event_loop()
-    reading = await loop.run_in_executor(None, tarot_service.generate_reading, question, draw_result, ctx.author.name)
+    memory_context = _get_memory_context(ctx.channel.id)
+    reading = await loop.run_in_executor(None, tarot_service.generate_reading, question, draw_result, ctx.author.name, memory_context)
     
     final_text = (
         f"🔮 **TRẢI BÀI TAROT**\n"
@@ -877,6 +922,11 @@ async def tarot(ctx, *, question: str = ""):
         await send_long(ctx, final_text)
     else:
         await wait_msg.edit(content=final_text)
+    await _remember_context(
+        ctx.channel.id,
+        "tarot",
+        f"{ctx.author.name} hỏi Tarot: {question}\nLời luận giải: {reading}",
+    )
         
     log.info(f"[tarot] Hoàn thành đọc Tarot cho {ctx.author.name}")
 
@@ -913,8 +963,9 @@ async def rutque(ctx, *, question: str = ""):
 
     # Sinh luận giải bằng Gemini
     loop = asyncio.get_event_loop()
+    memory_context = _get_memory_context(ctx.channel.id)
     reading = await loop.run_in_executor(
-        None, kinhdich_service.generate_reading, question, hexagram, ctx.author.name
+        None, kinhdich_service.generate_reading, question, hexagram, ctx.author.name, memory_context
     )
 
     final_text = (
@@ -931,6 +982,11 @@ async def rutque(ctx, *, question: str = ""):
         await send_long(ctx, final_text)
     else:
         await wait_msg.edit(content=final_text)
+    await _remember_context(
+        ctx.channel.id,
+        "rutque",
+        f"{ctx.author.name} hỏi Kinh Dịch: {question}\nQuẻ: {hexagram['ten']}\nLuận giải: {reading}",
+    )
 
     log.info(f"[rutque] Hoàn thành rút quẻ cho {ctx.author.name}")
 
@@ -967,8 +1023,9 @@ async def luachon(ctx, *, question_and_choices: str = ""):
 
     # Sinh luận giải bằng Gemini
     loop = asyncio.get_event_loop()
+    memory_context = _get_memory_context(ctx.channel.id)
     reading = await loop.run_in_executor(
-        None, kinhdich_service.generate_choice_reading, question_and_choices, hexagram, ctx.author.name
+        None, kinhdich_service.generate_choice_reading, question_and_choices, hexagram, ctx.author.name, memory_context
     )
 
     final_text = (
@@ -985,6 +1042,11 @@ async def luachon(ctx, *, question_and_choices: str = ""):
         await send_long(ctx, final_text)
     else:
         await wait_msg.edit(content=final_text)
+    await _remember_context(
+        ctx.channel.id,
+        "luachon",
+        f"{ctx.author.name} nhờ chọn: {question_and_choices}\nQuẻ: {hexagram['ten']}\nKết luận: {reading}",
+    )
 
     log.info(f"[luachon] Hoàn thành lựa chọn cho {ctx.author.name}")
 
@@ -1052,8 +1114,9 @@ async def thongke_kinhdich(ctx, *, target_str: str = ""):
 
     # Gọi hàm generate_thongke
     loop = asyncio.get_event_loop()
+    memory_context = _get_memory_context(ctx.channel.id)
     reading = await loop.run_in_executor(
-        None, kinhdich_service.generate_thongke, display_name, history_texts
+        None, kinhdich_service.generate_thongke, display_name, history_texts, memory_context
     )
 
     final_text = (
@@ -1067,6 +1130,11 @@ async def thongke_kinhdich(ctx, *, target_str: str = ""):
         await send_long(ctx, final_text)
     else:
         await wait_msg.edit(content=final_text)
+    await _remember_context(
+        ctx.channel.id,
+        "thongke_kinhdich",
+        f"Thống kê gieo quẻ/vận may của {display_name}:\n{reading}",
+    )
 
     log.info(f"[thongke_kinhdich] Hoàn thành thống kê cho {target_name}")
 

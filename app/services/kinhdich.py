@@ -616,7 +616,7 @@ class KinhDichService:
             f"└  {h['noi_quai']}\n"
         )
 
-    def generate_reading(self, question: str, hexagram: dict, user_name: str) -> str:
+    def generate_reading(self, question: str, hexagram: dict, user_name: str, memory_context: str = "") -> str:
         """Gọi Gemini để luận giải quẻ dịch dựa trên câu hỏi."""
         h = hexagram
 
@@ -637,6 +637,7 @@ class KinhDichService:
             f"64 quẻ dịch, bát quái, ngũ hành và lý thuyết âm dương.\n\n"
 
             f"Người dùng '{user_name}' hỏi: \"{question}\"\n\n"
+            f"{self._memory_prompt(memory_context)}"
 
             f"Quẻ đã rút:\n"
             f"- Quẻ số: {h['so']}\n"
@@ -684,7 +685,7 @@ class KinhDichService:
             log.error(f"[kinhdich] Lỗi khi gọi Gemini: {e}", exc_info=True)
             return "Đã có lỗi xảy ra khi luận giải quẻ dịch (Lỗi AI). Xin hãy thử lại sau."
 
-    def generate_choice_reading(self, question_and_choices: str, hexagram: dict, user_name: str) -> str:
+    def generate_choice_reading(self, question_and_choices: str, hexagram: dict, user_name: str, memory_context: str = "") -> str:
         """Gọi Gemini để quyết định một lựa chọn duy nhất dựa trên quẻ dịch."""
         h = hexagram
 
@@ -703,6 +704,7 @@ class KinhDichService:
         prompt = (
             f"Bạn là một bậc thầy Kinh Dịch uyên bác. "
             f"Người dùng '{user_name}' đang phân vân và đưa ra câu hỏi cùng các lựa chọn sau: \"{question_and_choices}\"\n\n"
+            f"{self._memory_prompt(memory_context)}"
 
             f"Quẻ đã rút:\n"
             f"- Quẻ số: {h['so']} - {h['ten']} ({h['ten_ngan']} - {h['han_tu']})\n"
@@ -736,12 +738,13 @@ class KinhDichService:
             log.error(f"[kinhdich] Lỗi khi gọi Gemini: {e}", exc_info=True)
             return "Đã có lỗi xảy ra khi luận giải quẻ dịch (Lỗi AI). Xin hãy thử lại sau."
 
-    def generate_thongke(self, user_name: str, history_texts: list[str]) -> str:
+    def generate_thongke(self, user_name: str, history_texts: list[str], memory_context: str = "") -> str:
         """Gọi Gemini để tổng hợp và luận giải các lần gieo quẻ trong ngày của user."""
         
         prompt = (
             f"Bạn là một bậc thầy Kinh Dịch. Dưới đây là lịch sử gieo quẻ/vận may hôm nay của '{user_name}':\n"
             f"{chr(10).join(history_texts)}\n\n"
+            f"{self._memory_prompt(memory_context)}"
             f"Nhiệm vụ: Thống kê và luận giải vận trình theo ĐÚNG FORMAT CỐ ĐỊNH dưới đây.\n"
             f"Yêu cầu: CỰC KỲ NGẮN GỌN (mỗi mục 1-2 câu), đủ ý, KHÔNG dông dài, khoảng cách giữa các dòng nhỏ, dùng emoji.\n\n"
             f"**Thống kê nhanh:** (gạch dòng siêu ngắn: quẻ gì, tier gì, hỏi gì)\n"
@@ -767,3 +770,13 @@ class KinhDichService:
         except Exception as e:
             log.error(f"[kinhdich] Lỗi khi gọi Gemini: {e}", exc_info=True)
             return "Đã có lỗi xảy ra khi thống kê (Lỗi AI). Xin hãy thử lại sau."
+
+    @staticmethod
+    def _memory_prompt(memory_context: str) -> str:
+        if not memory_context.strip():
+            return ""
+        return (
+            "Ngữ cảnh đã nhớ trong 2 ngày gần đây của kênh này:\n"
+            f"{memory_context.strip()}\n"
+            "Hãy dùng ngữ cảnh này để luận giải sát hoàn cảnh hơn, nhưng không bịa thêm dữ kiện.\n\n"
+        )
