@@ -52,7 +52,7 @@ class XinKeoService:
             "result": result
         }
 
-    def generate_luan_giai(self, wish: str, roll_result: dict) -> str:
+    def generate_luan_giai(self, wish: str, roll_result: dict, memory_context: str = "") -> str:
         """Gọi Gemini sinh lời luận giải ngắn gọn (2-4 câu) phù hợp với kết quả xin keo và nội dung lời khấn."""
         result_type = roll_result["result"]
 
@@ -70,6 +70,7 @@ class XinKeoService:
         # Xây dựng prompt cho Gemini
         prompt = (
             "Bạn là một bậc trưởng thượng am hiểu tâm linh dân gian Việt Nam, có giọng văn trang trọng, bình tĩnh, ấm áp và thành kính.\n"
+            f"{self._memory_prompt(memory_context)}"
             f"Người dùng vừa thực hiện nghi lễ xin keo với lời khấn sau: \"{wish}\"\n"
             f"Kết quả xin keo nhận được là: **{result_type}**.\n\n"
             "Hãy viết một đoạn luận giải ngắn gọn từ 2 đến 4 câu theo nguyên tắc sau:\n"
@@ -89,3 +90,13 @@ class XinKeoService:
         except Exception as e:
             log.error(f"[xinkeo] Lỗi khi gọi Gemini: {e}", exc_info=True)
             return fallback
+
+    @staticmethod
+    def _memory_prompt(memory_context: str) -> str:
+        if not memory_context.strip():
+            return ""
+        return (
+            "Ngữ cảnh đã nhớ trong 2 ngày gần đây của kênh này:\n"
+            f"{memory_context.strip()}\n"
+            "Hãy dùng ngữ cảnh này để luận giải sát bối cảnh hơn, nhưng không bịa thêm dữ kiện.\n\n"
+        )

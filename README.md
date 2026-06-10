@@ -37,6 +37,7 @@ Copy or create a `.env` file in the project root:
 ```env
 DISCORD_TOKEN=your_discord_user_token_here
 GEMINI_API_KEY=your_gemini_api_key_here
+MEMORY_TTL_HOURS=48
 # CHANNEL_ID=your_target_channel_id_here  # (Optional)
 ```
 
@@ -89,6 +90,7 @@ Create a `.env` file in the project root (see the instructions above):
 ```env
 DISCORD_TOKEN=your_discord_user_token_here
 GEMINI_API_KEY=your_gemini_api_key_here
+MEMORY_TTL_HOURS=48
 ```
 
 > [!CAUTION]
@@ -106,6 +108,7 @@ docker build -t discord-summarizer-bot .
 docker run -d \
   --name discord-bot \
   --env-file .env \
+  -v discord-bot-data:/data \
   --restart unless-stopped \
   discord-summarizer-bot
 ```
@@ -115,6 +118,7 @@ docker run -d \
 | `-d` | Run detached |
 | `--name discord-bot` | Set a container name for easier management |
 | `--env-file .env` | Load environment variables from `.env` |
+| `-v discord-bot-data:/data` | Persist short-term memory and daily fortune history across container rebuilds |
 | `--restart unless-stopped` | Restart automatically if the bot crashes, unless stopped manually |
 
 ### 4. Manage the container
@@ -147,6 +151,7 @@ docker rm -f discord-bot
 docker run -d \
   --name discord-bot \
   --env-file .env \
+  -v discord-bot-data:/data \
   --restart unless-stopped \
   discord-summarizer-bot
 ```
@@ -169,5 +174,5 @@ Anyone in the Group DM can use the following commands:
 ```bash
 docker build -t discord-summarizer-bot .
 docker rm -f discord-bot
-docker run -d --name discord-bot --env-file .env --restart unless-stopped discord-summarizer-bot
+docker run -d --name discord-bot --env-file .env -v discord-bot-data:/data --restart unless-stopped discord-summarizer-bot
 ```

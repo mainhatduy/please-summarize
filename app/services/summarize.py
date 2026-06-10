@@ -14,12 +14,12 @@ class SummarizeService:
         self.client = genai.Client(api_key=Config.GEMINI_API_KEY)
         self.model = Config.MODEL_NAME
 
-    def summarize(self, messages: list[str]) -> str:
+    def summarize(self, messages: list[str], memory_context: str = "") -> str:
         if not messages:
             log.warning("summarize() được gọi với danh sách tin nhắn rỗng.")
             return "Không có nội dung nào để tóm tắt."
 
-        prompt = build_summary_prompt(messages)
+        prompt = build_summary_prompt(messages, memory_context=memory_context)
         log.debug(f"Prompt đã build: {len(messages)} tin nhắn, ~{len(prompt)} ký tự – đang gọi Gemini ({self.model})...")
 
         # Truncate prompt từ đầu nếu vượt giới hạn context window,

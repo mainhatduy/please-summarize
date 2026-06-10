@@ -142,6 +142,10 @@ _TIER_WEIGHTS = [t.weight for t in TIERS]
 
 # ── Cooldown tracker (JSON File Persistence) ──────────────────────────────────
 HISTORY_FILE = os.path.join(
+    Config.DATA_DIR,
+    "fortune_history.json"
+)
+LEGACY_HISTORY_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "database",
     "fortune_history.json"
@@ -149,10 +153,13 @@ HISTORY_FILE = os.path.join(
 
 
 def load_history() -> dict[str, str]:
-    if not os.path.exists(HISTORY_FILE):
+    path = HISTORY_FILE
+    if not os.path.exists(path) and os.path.exists(LEGACY_HISTORY_FILE):
+        path = LEGACY_HISTORY_FILE
+    if not os.path.exists(path):
         return {}
     try:
-        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         log.error(f"[fortune] Lỗi khi load history file: {e}")
@@ -183,16 +190,17 @@ class FortuneService:
         self.client = genai.Client(api_key=Config.GEMINI_API_KEY)
         self.model = Config.MODEL_NAME
 
-    def generate_fortune_msg(self, tier: Tier, animal: str, messages: list[str]) -> str:
+    def generate_fortune_msg(self, tier: Tier, animal: str, messages: list[str], memory_context: str = "") -> str:
         """Gọi Gemini sinh lời bình vận may dựa trên tin nhắn thực của user."""
-        if not messages:
+        if not messages and not memory_context.strip():
             return tier.fortune_msg  # fallback về text cứng nếu không có tin nhắn
 
-        chat_log = "\n".join(messages)
+        chat_log = "\n".join(messages) if messages else "(Không có tin nhắn gần đây của user.)"
         # Tách bỏ emoji ở đầu tên động vật (ví dụ "🐉 Rồng Phương Đông" -> "Rồng Phương Đông")
         animal_name = " ".join(animal.split()[1:]) if len(animal.split()) > 1 else animal
         prompt = (
             f"Bạn là nhà tiên tri hài hước trên Discord.\n"
+            f"{self._memory_prompt(memory_context)}"
             f"User vừa roll được Tier **{tier.name}** ({tier.label.strip()}) – {animal_name} bản mệnh.\n"
             f"Dựa vào các tin nhắn gần đây của user dưới đây, hãy viết 2-3 câu luận giải vận may HÔM NAY cho họ.\n"
             f"Phong cách: hài hước, dí dỏm, có thể khen hoặc chọc nhẹ. Viết bằng tiếng Việt. Không cần chào hỏi.\n"
@@ -211,7 +219,7 @@ class FortuneService:
             log.error(f"[fortune] Lỗi Gemini: {e}", exc_info=True)
             return tier.fortune_msg  # fallback
 
-    def roll(self, user_id: int, messages: list[str] | None = None) -> FortuneResult:
+    def roll(self, user_id: int, messages: list[str] | None = None, memory_context: str = "") -> FortuneResult:
         """Roll vận may cho user.
 
         Args:
@@ -234,11 +242,21 @@ class FortuneService:
         secure_random = random.SystemRandom()
         tier: Tier = secure_random.choices(TIERS, weights=_TIER_WEIGHTS, k=1)[0]
         animal: str = secure_random.choice(tier.animals)
-        fortune_msg = self.generate_fortune_msg(tier, animal, messages or [])
+        fortune_msg = self.generate_fortune_msg(tier, animal, messages or [], memory_context=memory_context)
 
         history[user_key] = datetime.now().isoformat()
         save_history(history)
         return FortuneResult(tier=tier, animal=animal, fortune_msg=fortune_msg, already_rolled=False)
+
+    @staticmethod
+    def _memory_prompt(memory_context: str) -> str:
+        if not memory_context.strip():
+            return ""
+        return (
+            "Ngữ cảnh đã nhớ trong 2 ngày gần đây của kênh này:\n"
+            f"{memory_context.strip()}\n"
+            "Hãy dùng ngữ cảnh này để nói đúng tình huống hơn, nhưng không bịa thêm dữ kiện.\n\n"
+        )
 
     def get_embed(self, result: FortuneResult, author_name: str) -> dict:
         """Trả về dict tham số để tạo discord.Embed từ FortuneResult.
