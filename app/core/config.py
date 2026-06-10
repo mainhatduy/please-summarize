@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     DISCORD_TOKEN: str = Field(default="")
     GEMINI_API_KEY: str = Field(default="")
     CHANNEL_ID: Optional[int] = Field(default=None)
+    DISCORD_WEBHOOK_URL: Optional[str] = Field(default=None)
 
 # Create a singleton instance for backward compatibility
 Config = Settings()
