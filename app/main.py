@@ -124,7 +124,22 @@ async def _update_queue_message(channel_id: int, header: str = ""):
 
 
 def get_voice_client_by_channel(channel_id: int):
+    """Tìm voice client theo channel ID (dùng cho cả internal callback và command)."""
     return next((vc for vc in bot.voice_clients if vc.channel.id == channel_id), None)
+
+
+def _get_voice_client_for_ctx(ctx) -> object:
+    """Tìm voice client cho context hiện tại.
+    Ưu tiên match chính xác channel, fallback tìm trong tất cả voice clients.
+    """
+    # Match chính xác bằng channel ID
+    vc = get_voice_client_by_channel(ctx.channel.id)
+    if vc:
+        return vc
+    # Fallback: nếu bot đang ở voice trong cùng guild/group, trả về voice client đó
+    if bot.voice_clients:
+        return bot.voice_clients[0]
+    return None
 
 
 def _play_after(channel_id: int, error):
@@ -886,7 +901,7 @@ async def luachon(ctx, *, question_and_choices: str = ""):
 async def join(ctx):
     """Lệnh: .join – Tham gia vào cuộc gọi thoại hiện tại của nhóm chat"""
     log.info(f"[join] Yêu cầu tham gia voice | channel_id={ctx.channel.id}")
-    voice_client = discord.utils.get(bot.voice_clients, channel=ctx.channel)
+    voice_client = _get_voice_client_for_ctx(ctx)
     if voice_client and voice_client.is_connected():
         log.info("[join] Bot đã ở trong cuộc gọi thoại rồi.")
         await ctx.send("Bot đã ở trong cuộc gọi thoại.")
@@ -908,7 +923,7 @@ async def join(ctx):
 async def leave(ctx):
     """Lệnh: .leave – Rời cuộc gọi thoại và dừng phát nhạc"""
     log.info(f"[leave] Yêu cầu rời voice | channel_id={ctx.channel.id}")
-    voice_client = discord.utils.get(bot.voice_clients, channel=ctx.channel)
+    voice_client = _get_voice_client_for_ctx(ctx)
     if voice_client and voice_client.is_connected():
         if voice_client.is_playing():
             _skip_requests.add(voice_client.channel.id)
@@ -931,7 +946,7 @@ async def play(ctx, *, query: str):
     """Lệnh: .play <tên bài hát hoặc link YouTube> – Phát nhạc trong cuộc gọi thoại"""
     log.info(f"[play] Yêu cầu phát nhạc | query='{query}' | channel_id={ctx.channel.id}")
 
-    voice_client = discord.utils.get(bot.voice_clients, channel=ctx.channel)
+    voice_client = _get_voice_client_for_ctx(ctx)
     if not voice_client or not voice_client.is_connected():
         log.debug("[play] Chưa kết nối voice – đang tham gia...")
         try:
@@ -998,7 +1013,7 @@ async def next_track(ctx):
     """Lệnh: .next (hoặc .skip) – Chuyển sang bài hát tiếp theo trong hàng đợi"""
     log.info(f"[next] Yêu cầu chuyển bài kế tiếp | channel_id={ctx.channel.id}")
     
-    voice_client = discord.utils.get(bot.voice_clients, channel=ctx.channel)
+    voice_client = _get_voice_client_for_ctx(ctx)
     if not voice_client or not voice_client.is_connected():
         log.warning("[next] Bot không ở trong cuộc gọi thoại nào.")
         await ctx.send("❌ Bot không ở trong cuộc gọi thoại nào. Hãy dùng `.play` để phát nhạc trước.")
@@ -1032,7 +1047,7 @@ async def show_queue(ctx):
     """Lệnh: .queue – Xem danh sách hàng đợi nhạc hiện tại"""
     log.info(f"[queue] Yêu cầu xem hàng đợi | channel_id={ctx.channel.id}")
     
-    voice_client = discord.utils.get(bot.voice_clients, channel=ctx.channel)
+    voice_client = _get_voice_client_for_ctx(ctx)
     if not voice_client or not voice_client.is_connected():
         log.warning("[queue] Bot không ở trong cuộc gọi thoại nào.")
         await ctx.send("❌ Bot không ở trong cuộc gọi thoại nào.")
