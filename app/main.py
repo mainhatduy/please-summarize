@@ -2,6 +2,11 @@ import asyncio
 import logging
 import random
 import time
+import json
+import threading
+import queue
+import urllib.request
+import ssl
 import discord
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
@@ -15,12 +20,52 @@ from app.services.tarot import TarotService
 from app.services.kinhdich import KinhDichService
 from app.services.tiktok import TikTokService
 
+# ── Webhook Logging ───────────────────────────────────────────────────────────
+log_queue = queue.Queue()
+
+class DiscordWebhookHandler(logging.Handler):
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            log_queue.put(msg)
+        except Exception:
+            self.handleError(record)
+
+def webhook_worker():
+    webhook_url = Config.DISCORD_WEBHOOK_URL
+    if not webhook_url:
+        return
+    while True:
+        msg = log_queue.get()
+        try:
+            req = urllib.request.Request(
+                webhook_url,
+                data=json.dumps({"content": msg[:1900]}).encode(),
+                headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'},
+                method='POST'
+            )
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            urllib.request.urlopen(req, timeout=5, context=ctx)
+        except Exception as e:
+            pass  # Silent fail to prevent loops
+        finally:
+            log_queue.task_done()
+
 # ── Logging setup ─────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+
+if Config.DISCORD_WEBHOOK_URL:
+    threading.Thread(target=webhook_worker, daemon=True).start()
+    webhook_handler = DiscordWebhookHandler()
+    webhook_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s", "%Y-%m-%d %H:%M:%S"))
+    webhook_handler.setLevel(logging.INFO)
+    logging.getLogger("bot").addHandler(webhook_handler)
 log = logging.getLogger("bot")
 # Giảm noise từ thư viện bên ngoài, tắt duplicate do discord có handler riêng
 for _lib in ("discord", "discord.http", "discord.gateway", "discord.client", "httpx", "httpcore"):
@@ -241,6 +286,7 @@ async def check_alone_voice_clients():
 async def on_ready():
     global _alone_checker_started
     log.info(f"Đã đăng nhập thành công với tài khoản: {bot.user} (ID: {bot.user.id})")
+    log.info("🚀 Bot đã khởi động và sẵn sàng hoạt động!")
     if not _alone_checker_started:
         bot.loop.create_task(check_alone_voice_clients())
         _alone_checker_started = True
@@ -427,14 +473,15 @@ async def help_cmd(ctx):
     await ctx.send(
         "**📋 Danh sách lệnh:**\n"
         "🎬 **Auto TikTok:** Paste link TikTok → bot tự gửi video/ảnh\n"
-        "`.tomtat [n]` – Tóm tắt n tin nhắn gần nhất (mặc định 50, tối đa 500)\n"
-        "`.tomtat_time [giờ]` – Tóm tắt tin nhắn trong n giờ qua (mặc định 1, tối đa 12)\n"
+        "`.tomtat [n] [@user]` – Tóm tắt n tin nhắn gần nhất (mặc định 50, tối đa 500)\n"
+        "`.tomtat_time [giờ] [@user]` – Tóm tắt tin nhắn trong n giờ qua (mặc định 1, tối đa 12)\n"
         "`.get_luck` – Roll vận may hôm nay (1 lần/ngày, reset 00:00)\n"
         "`.taixiu` (hoặc `.tx`) – Chơi Tài Xỉu 3 xúc xắc (kèm chẵn lẻ)\n"
         "`.xinkeo <lời khấn>` (hoặc `.xk`) – Xin keo truyền thống\n"
         "`.tarot <câu hỏi>` – Xem bói Tarot (1 lá chính, 3 lá phụ)\n"
         "`.rutque <câu hỏi>` (hoặc `.rq`) – Rút quẻ Kinh Dịch\n"
         "`.luachon <câu hỏi và các lựa chọn>` (hoặc `.lc`) – Kinh Dịch đưa ra quyết định\n"
+        "`.thongke_kinhdich [@user]` (hoặc `.tk_kd`) – Thống kê & luận giải Kinh Dịch trong ngày\n"
         "`.play <tên bài/link YouTube>` – Phát nhạc trong voice\n"
         "`.next` – Chuyển sang bài hát tiếp theo trong hàng đợi\n"
         "`.queue` – Xem danh sách hàng đợi nhạc\n"
@@ -450,9 +497,26 @@ async def help_cmd(ctx):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @bot.command(name="tomtat", aliases=["sum_msgs"])
-async def tomtat(ctx, n: int = 50):
-    """Lệnh: .tomtat <n> – Tóm tắt n tin nhắn gần nhất (mặc định 50)"""
-    log.info(f"[tomtat] Yêu cầu tóm tắt {n} tin nhắn | channel_id={ctx.channel.id}")
+async def tomtat(ctx, *args):
+    """Lệnh: .tomtat <n> [@user] – Tóm tắt n tin nhắn gần nhất (mặc định 50)"""
+    n = 50
+    target_str = None
+    if args:
+        try:
+            n = int(args[0])
+            if len(args) > 1:
+                target_str = " ".join(args[1:])
+        except ValueError:
+            target_str = " ".join(args)
+
+    target_id = None
+    target_name = None
+    if ctx.message.mentions:
+        target_id = ctx.message.mentions[0].id
+    elif target_str:
+        target_name = target_str[1:].lower() if target_str.startswith('@') else target_str.lower()
+
+    log.info(f"[tomtat] Yêu cầu tóm tắt {n} tin nhắn | target={target_str} | channel_id={ctx.channel.id}")
 
     # Kiểm tra cooldown
     remaining = _check_cooldown(ctx.author.id)
@@ -466,14 +530,28 @@ async def tomtat(ctx, n: int = 50):
         return
 
     await _apply_channel_rate_limit(ctx.channel.id)
-    log.debug(f"[tomtat] Đang lấy lịch sử chat (limit={n + 1})...")
+    log.debug(f"[tomtat] Đang lấy lịch sử chat...")
     messages = []
     skipped = 0
     skipped_bots = 0
-    async for msg in ctx.channel.history(limit=n + 1):
+    
+    # Mở rộng limit nếu có target để tìm đủ n tin nhắn của target, max limit = 2000
+    fetch_limit = 2000 if target_str else n + 1
+    
+    async for msg in ctx.channel.history(limit=fetch_limit):
         # Bỏ qua lệnh gọi bản thân
         if msg.id == ctx.message.id:
             continue
+            
+        # Lọc theo user nếu có target
+        if target_id and msg.author.id != target_id:
+            continue
+        if target_name:
+            auth_name = msg.author.name.lower()
+            auth_disp = getattr(msg.author, 'display_name', '').lower()
+            if target_name not in auth_name and target_name not in auth_disp:
+                continue
+
         # Bỏ qua tin nhắn từ bot thực sự HOẶC từ chính self-bot này
         # (self-bot là user account nên msg.author.bot == False, phải check id)
         if msg.author.bot or msg.author.id == bot.user.id:
@@ -490,15 +568,19 @@ async def tomtat(ctx, n: int = 50):
             log.debug(f"[tomtat] Bỏ qua lệnh từ {msg.author.name}: {msg.content[:30]}")
             skipped += 1
             continue
+            
         messages.append(f"{msg.author.name}: {msg.content}")
+        if len(messages) >= n:
+            break
 
     messages.reverse()
     collected = len(messages)
     log.info(f"[tomtat] Đã thu thập được {collected} tin nhắn text – đang gọi Gemini API...")
 
     # Hiển thị metadata trước khi gọi Gemini
+    target_info = f" của **{target_str}**" if target_str else ""
     await ctx.send(
-        f"📊 Thu thập được **{collected}/{n}** tin nhắn text"
+        f"📊 Thu thập được **{collected}/{n}** tin nhắn text{target_info}"
         + (f" (bỏ qua {skipped} ảnh/file)" if skipped else "")
         + (f" (bỏ qua {skipped_bots} tin nhắn bot)" if skipped_bots else "")
         + "\nĐang gọi Gemini..."
@@ -512,9 +594,26 @@ async def tomtat(ctx, n: int = 50):
 
 
 @bot.command(name="tomtat_time", aliases=["sum_time"])
-async def tomtat_time(ctx, hours: float = 1.0):
-    """Lệnh: .tomtat_time <hours> – Tóm tắt tin nhắn trong n giờ trước (mặc định 1)"""
-    log.info(f"[tomtat_time] Yêu cầu tóm tắt {hours} giờ | channel_id={ctx.channel.id}")
+async def tomtat_time(ctx, *args):
+    """Lệnh: .tomtat_time <hours> [@user] – Tóm tắt tin nhắn trong n giờ trước (mặc định 1)"""
+    hours = 1.0
+    target_str = None
+    if args:
+        try:
+            hours = float(args[0])
+            if len(args) > 1:
+                target_str = " ".join(args[1:])
+        except ValueError:
+            target_str = " ".join(args)
+
+    target_id = None
+    target_name = None
+    if ctx.message.mentions:
+        target_id = ctx.message.mentions[0].id
+    elif target_str:
+        target_name = target_str[1:].lower() if target_str.startswith('@') else target_str.lower()
+
+    log.info(f"[tomtat_time] Yêu cầu tóm tắt {hours} giờ | target={target_str} | channel_id={ctx.channel.id}")
 
     # Kiểm tra cooldown
     remaining = _check_cooldown(ctx.author.id)
@@ -538,14 +637,25 @@ async def tomtat_time(ctx, hours: float = 1.0):
     async for msg in ctx.channel.history(limit=None):
         if msg.id == ctx.message.id:
             continue
+            
+        # Nếu gặp tin nhắn có thời gian cũ hơn after_time, dừng lại
+        if msg.created_at < after_time:
+            break
+            
+        # Lọc theo user nếu có target
+        if target_id and msg.author.id != target_id:
+            continue
+        if target_name:
+            auth_name = msg.author.name.lower()
+            auth_disp = getattr(msg.author, 'display_name', '').lower()
+            if target_name not in auth_name and target_name not in auth_disp:
+                continue
+
         # Bỏ qua tin nhắn từ bot thực sự HOẶC từ chính self-bot này
         if msg.author.bot or msg.author.id == bot.user.id:
             log.debug(f"[tomtat_time] Bỏ qua tin nhắn từ bot/self: {msg.author.name}")
             skipped_bots += 1
             continue
-        # Nếu gặp tin nhắn có thời gian cũ hơn after_time, dừng lại
-        if msg.created_at < after_time:
-            break
         # Bỏ qua tin nhắn chỉ có ảnh/file (không có nội dung text)
         if not msg.content.strip():
             log.debug(f"[tomtat_time] Bỏ qua tin nhắn không có text từ {msg.author.name}")
@@ -572,8 +682,9 @@ async def tomtat_time(ctx, hours: float = 1.0):
     log.info(f"[tomtat_time] Đã thu thập được {collected} tin nhắn text – đang gọi Gemini API...")
 
     # Hiển thị metadata trước khi gọi Gemini
+    target_info = f" của **{target_str}**" if target_str else ""
     await ctx.send(
-        f"📊 Thu thập được **{collected}** tin nhắn text trong {hours} giờ qua"
+        f"📊 Thu thập được **{collected}** tin nhắn text trong {hours} giờ qua{target_info}"
         + (f" (bỏ qua {skipped} ảnh/file)" if skipped else "")
         + (f" (bỏ qua {skipped_bots} tin nhắn bot)" if skipped_bots else "")
         + "\nĐang gọi Gemini..."
@@ -876,6 +987,88 @@ async def luachon(ctx, *, question_and_choices: str = ""):
         await wait_msg.edit(content=final_text)
 
     log.info(f"[luachon] Hoàn thành lựa chọn cho {ctx.author.name}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# THỐNG KÊ KINH DỊCH
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bot.command(name="thongke_kinhdich", aliases=["tk_kd"])
+async def thongke_kinhdich(ctx, *, target_str: str = ""):
+    """Lệnh: .thongke_kinhdich [@user] – Thống kê và luận giải vận trình Kinh Dịch trong ngày"""
+    log.info(f"[thongke_kinhdich] Yêu cầu thống kê | target='{target_str}' | channel_id={ctx.channel.id}")
+
+    target_id = None
+    target_name = None
+    if ctx.message.mentions:
+        target_id = ctx.message.mentions[0].id
+        target_name = ctx.message.mentions[0].name.lower()
+    elif target_str:
+        if target_str.startswith('@'):
+            target_name = target_str[1:].lower()
+        else:
+            target_name = target_str.lower()
+    else:
+        await ctx.send("Vui lòng nhập người cần thống kê. Ví dụ: `.thongke_kinhdich @huuannnn`")
+        return
+
+    # Xác định mốc 0:00 hôm nay
+    now = datetime.now(timezone.utc)
+    vn_tz = timezone(timedelta(hours=7))
+    now_vn = now.astimezone(vn_tz)
+    start_of_day_vn = now_vn.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_day_utc = start_of_day_vn.astimezone(timezone.utc)
+
+    await _apply_channel_rate_limit(ctx.channel.id)
+    display_name = target_str if target_str else (f"@{target_name}" if target_name else "bạn")
+    wait_msg = await ctx.send(f"Đang thu thập dữ liệu gieo quẻ hôm nay của {display_name}...")
+
+    history_texts = []
+    
+    # Duyệt tin nhắn từ hiện tại về quá khứ
+    async for msg in ctx.channel.history(limit=None):
+        if msg.created_at < start_of_day_utc:
+            break
+            
+        # Ta cần thu thập các tin nhắn của bot mà có đề cập đến user
+        if msg.author.id == bot.user.id:
+            content_lower = msg.content.lower()
+            mentioned_id = f"<@{target_id}>" if target_id else ""
+            
+            # Check nếu tin nhắn nói về user
+            if (target_name and target_name in content_lower) or (mentioned_id and mentioned_id in msg.content):
+                # Chỉ lấy các kết quả gieo quẻ / vận may
+                if any(kw in msg.content for kw in ["QUẺ KINH DỊCH", "QUYẾT ĐỊNH TỪ KINH DỊCH", "Quẻ Xin Keo", "Trải bài của", "TRẢI BÀI TAROT", "Tier", "Quẻ gieo:"]):
+                    history_texts.append(msg.content)
+
+    if not history_texts:
+        await wait_msg.edit(content=f"Không tìm thấy lịch sử gieo quẻ nào của {display_name} trong ngày hôm nay.")
+        return
+
+    # Đảo ngược để theo thứ tự thời gian từ sáng đến giờ
+    history_texts.reverse()
+
+    await wait_msg.edit(content=f"Đã tìm thấy {len(history_texts)} lần gieo quẻ/vận may của {display_name} hôm nay. Đang phân tích và luận giải...")
+
+    # Gọi hàm generate_thongke
+    loop = asyncio.get_event_loop()
+    reading = await loop.run_in_executor(
+        None, kinhdich_service.generate_thongke, display_name, history_texts
+    )
+
+    final_text = (
+        f"📊 **THỐNG KÊ KINH DỊCH TRONG NGÀY**\n"
+        f"**Người xem:** {display_name}\n\n"
+        f"{reading}"
+    )
+
+    if len(final_text) > 1900:
+        await wait_msg.delete()
+        await send_long(ctx, final_text)
+    else:
+        await wait_msg.edit(content=final_text)
+
+    log.info(f"[thongke_kinhdich] Hoàn thành thống kê cho {target_name}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

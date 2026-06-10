@@ -735,3 +735,35 @@ class KinhDichService:
         except Exception as e:
             log.error(f"[kinhdich] Lỗi khi gọi Gemini: {e}", exc_info=True)
             return "Đã có lỗi xảy ra khi luận giải quẻ dịch (Lỗi AI). Xin hãy thử lại sau."
+
+    def generate_thongke(self, user_name: str, history_texts: list[str]) -> str:
+        """Gọi Gemini để tổng hợp và luận giải các lần gieo quẻ trong ngày của user."""
+        
+        prompt = (
+            f"Bạn là một bậc thầy Kinh Dịch. Dưới đây là lịch sử gieo quẻ/vận may hôm nay của '{user_name}':\n"
+            f"{chr(10).join(history_texts)}\n\n"
+            f"Nhiệm vụ: Thống kê và luận giải vận trình theo ĐÚNG FORMAT CỐ ĐỊNH dưới đây.\n"
+            f"Yêu cầu: CỰC KỲ NGẮN GỌN (mỗi mục 1-2 câu), đủ ý, KHÔNG dông dài, khoảng cách giữa các dòng nhỏ, dùng emoji.\n\n"
+            f"**Thống kê nhanh:** (gạch dòng siêu ngắn: quẻ gì, tier gì, hỏi gì)\n"
+            f"**🔮 Luận giải tổng quan:** \"[1 câu chốt]\" - [1-2 câu giải thích]\n"
+            f"**💼 Công việc & Dự án:** [1 câu]\n"
+            f"**❤️ Tình cảm & Nhân duyên:** [1 câu]\n"
+            f"**🧘 Nội tâm:** [1 câu]\n"
+            f"**🍀 Vận may:** [1 câu]\n\n"
+            f"**💡 Lời khuyên cốt lõi:**\n"
+            f"*[1 câu châm ngôn Kinh Dịch]*\n"
+            f"✅ **Hãy làm:** [1 câu]\n"
+            f"❌ **Hãy bỏ:** [1 câu]\n\n"
+            f"Tuyệt đối tuân thủ cấu trúc này, không tự bịa thêm tiêu đề, trả lời bằng tiếng Việt."
+        )
+
+        try:
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+            )
+            result = response.text.strip() if response.text else ""
+            return result or "Các tinh tú đang che mờ thiên cơ, xin hãy thử lại sau..."
+        except Exception as e:
+            log.error(f"[kinhdich] Lỗi khi gọi Gemini: {e}", exc_info=True)
+            return "Đã có lỗi xảy ra khi thống kê (Lỗi AI). Xin hãy thử lại sau."
