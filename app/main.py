@@ -482,6 +482,7 @@ async def help_cmd(ctx):
         "`.rutque <câu hỏi>` (hoặc `.rq`) – Rút quẻ Kinh Dịch\n"
         "`.luachon <câu hỏi và các lựa chọn>` (hoặc `.lc`) – Kinh Dịch đưa ra quyết định\n"
         "`.thongke_kinhdich [@user]` (hoặc `.tk_kd`) – Thống kê & luận giải Kinh Dịch trong ngày\n"
+        "`.cau_hoi` – Tạo câu hỏi drama/thả thính tự động lấy ngữ cảnh cho 1 user ngẫu nhiên trong 4h qua\n"
         "`.play <tên bài/link YouTube>` – Phát nhạc trong voice\n"
         "`.next` – Chuyển sang bài hát tiếp theo trong hàng đợi\n"
         "`.queue` – Xem danh sách hàng đợi nhạc\n"
@@ -696,6 +697,67 @@ async def tomtat_time(ctx, *args):
     await send_long(ctx, f"**Tóm tắt:**\n{summary}")
     log.info("[tomtat_time] Hoàn thành.")
 
+
+@bot.command(name="cau_hoi")
+async def cau_hoi(ctx, *args):
+    """Lệnh: .cau_hoi – Tạo câu hỏi drama/thả thính tự động lấy ngữ cảnh cho 1 user ngẫu nhiên trong 4h qua"""
+    log.info(f"[cau_hoi] Yêu cầu tạo câu hỏi drama | channel_id={ctx.channel.id}")
+
+    # Kiểm tra cooldown
+    remaining = _check_cooldown(ctx.author.id)
+    if remaining is not None:
+        await ctx.send(f"⏳ Bạn cần chờ **{remaining:.0f} giây** nữa để dùng lệnh này.")
+        return
+
+    hours = 4.0
+    after_time = datetime.now(timezone.utc) - timedelta(hours=hours)
+    await _apply_channel_rate_limit(ctx.channel.id)
+
+    messages = []
+    active_users = {} # user_id -> user_name
+    
+    async for msg in ctx.channel.history(limit=None):
+        if msg.id == ctx.message.id:
+            continue
+            
+        if msg.created_at < after_time:
+            break
+
+        if msg.author.bot or msg.author.id == bot.user.id:
+            continue
+            
+        if not msg.content.strip() or msg.content.strip().startswith(bot.command_prefix):
+            continue
+
+        messages.append(f"{msg.author.name}: {msg.content}")
+        active_users[msg.author.id] = msg.author.name
+        
+        if len(messages) >= 500:
+            break
+
+    if not messages or not active_users:
+        await ctx.send("Không có ai nói chuyện trong 4 giờ qua để đặt câu hỏi cả.")
+        return
+
+    # Chọn ngẫu nhiên 1 user
+    target_id = random.choice(list(active_users.keys()))
+    target_name = active_users[target_id]
+
+    # Đảo ngược tin nhắn theo đúng thứ tự thời gian
+    messages.reverse()
+    
+    wait_msg = await ctx.send(f"Đang ngẫm nghĩ một câu hỏi thật sâu sắc dành cho **{target_name}**...")
+
+    # Tạo câu hỏi drama
+    loop = asyncio.get_event_loop()
+    question = await loop.run_in_executor(
+        None, summarize_service.generate_drama_question, messages, target_name
+    )
+
+    log.info(f"[cau_hoi] Đã tạo câu hỏi cho {target_name}.")
+    await wait_msg.delete()
+    await send_long(ctx, f"<@{target_id}> {question}")
+    log.info("[cau_hoi] Hoàn thành.")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # RANDOM VẬN MAY – GET LUCK
