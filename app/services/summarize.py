@@ -1,7 +1,7 @@
 import logging
 from google import genai
 from app.core.config import Config
-from app.services.prompt import build_summary_prompt
+from app.services.prompt import build_summary_prompt, build_drama_question_prompt
 
 log = logging.getLogger("bot.summarize")
 
@@ -42,3 +42,26 @@ class SummarizeService:
         except Exception as e:
             log.error(f"Lỗi khi gọi Gemini API: {e}", exc_info=True)
             return f"Có lỗi xảy ra khi tóm tắt: {str(e)}"
+
+    def generate_drama_question(self, messages: list[str], target_name: str) -> str:
+        if not messages:
+            log.warning("generate_drama_question() được gọi với danh sách tin nhắn rỗng.")
+            return "Trời ơi, không có ai nói gì để mình lấy cớ thả thính cả..."
+
+        prompt = build_drama_question_prompt(messages, target_name)
+        log.debug(f"Prompt drama đã build: {len(messages)} tin nhắn, ~{len(prompt)} ký tự – đang gọi Gemini ({self.model})...")
+
+        if len(prompt) > MAX_PROMPT_CHARS:
+            prompt = prompt[-MAX_PROMPT_CHARS:]
+
+        try:
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+            )
+            result = response.text.strip() if response.text else ""
+            log.info(f"Gemini phản hồi drama thành công ({len(result)} ký tự).")
+            return result or "Người ta không có gì để nói với bạn..."
+        except Exception as e:
+            log.error(f"Lỗi khi gọi Gemini API (drama): {e}", exc_info=True)
+            return "Bị nghẹn lời rồi, thử lại sau nhé..."
