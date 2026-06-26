@@ -19,6 +19,7 @@ from app.services.xinkeo import XinKeoService
 from app.services.tarot import TarotService
 from app.services.kinhdich import KinhDichService
 from app.services.tiktok import TikTokService
+from app.services.booking import BookingService, APPROVE_EMOJI, REJECT_EMOJI
 
 # ── Webhook Logging ───────────────────────────────────────────────────────────
 log_queue = queue.Queue()
@@ -83,6 +84,7 @@ xinkeo_service = XinKeoService()
 tarot_service = TarotService()
 kinhdich_service = KinhDichService()
 tiktok_service = TikTokService()
+booking_service = BookingService()
 
 # Cooldown tracker: {user_id: last_used_timestamp}
 _COOLDOWN_SECONDS = 60
@@ -100,6 +102,7 @@ _SEND_JITTER_MAX = 0.8                # delay ngẫu nhiên tối đa giữa cá
 # Theo dõi thời gian bot ở một mình trong voice: {channel_id: alone_since_timestamp}
 _alone_since: dict[int, float] = {}
 _alone_checker_started = False
+_booking_reminder_started = False
 
 # Hàng đợi nhạc theo voice channel id
 _song_queues: dict[int, list[dict]] = {}
@@ -282,14 +285,59 @@ async def check_alone_voice_clients():
         await asyncio.sleep(1.0)
 
 
+async def _get_channel_by_id(channel_id: int):
+    channel = bot.get_channel(int(channel_id))
+    if channel is not None:
+        return channel
+    try:
+        return await bot.fetch_channel(int(channel_id))
+    except Exception as e:
+        log.error(f"[booking] Không thể fetch channel {channel_id}: {e}", exc_info=True)
+        return None
+
+
+def _build_booking_reminder_text(booking: dict) -> str:
+    mentions = booking_service.approved_mentions(booking)
+    mention_text = " ".join(mentions) if mentions else "Chưa có ai xác nhận tham gia."
+    return (
+        "⏰ **Nhắc lịch: còn khoảng 1 tiếng nữa!**\n"
+        f"**Sự kiện:** {booking['event_name']}\n"
+        f"**Thời gian:** {booking_service.format_event_time(booking)}\n"
+        f"**Địa điểm:** {booking['location']}\n"
+        f"**Người đã xác nhận:** {mention_text}"
+    )
+
+
+async def check_booking_reminders():
+    """Tác vụ nền nhắc các booking còn <= 1 tiếng."""
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        try:
+            due_bookings = booking_service.get_due_one_hour_reminders()
+            for booking in due_bookings:
+                channel = await _get_channel_by_id(booking["channel_id"])
+                if channel is None:
+                    continue
+
+                await channel.send(_build_booking_reminder_text(booking))
+                booking_service.mark_one_hour_notified(booking["id"])
+                log.info(f"[booking] Đã gửi nhắc lịch 1 tiếng cho booking {booking['id']}")
+        except Exception as e:
+            log.error(f"[booking] Lỗi trong tác vụ nhắc lịch: {e}", exc_info=True)
+        await asyncio.sleep(60.0)
+
+
 @bot.event
 async def on_ready():
-    global _alone_checker_started
+    global _alone_checker_started, _booking_reminder_started
     log.info(f"Đã đăng nhập thành công với tài khoản: {bot.user} (ID: {bot.user.id})")
     log.info("🚀 Bot đã khởi động và sẵn sàng hoạt động!")
     if not _alone_checker_started:
         bot.loop.create_task(check_alone_voice_clients())
         _alone_checker_started = True
+    if not _booking_reminder_started:
+        bot.loop.create_task(check_booking_reminders())
+        _booking_reminder_started = True
 
 
 @bot.event
@@ -367,6 +415,52 @@ async def on_command_error(ctx, error):
     await ctx.send(f"⚠️ Có lỗi xảy ra khi thực hiện lệnh: {error}")
 
 
+async def _get_user_name(user_id: int, fallback_user=None) -> str:
+    user = fallback_user or bot.get_user(int(user_id))
+    if user is None:
+        try:
+            user = await bot.fetch_user(int(user_id))
+        except Exception:
+            return str(user_id)
+
+    return (
+        getattr(user, "display_name", None)
+        or getattr(user, "name", None)
+        or str(user)
+    )
+
+
+async def _handle_booking_reaction(message_id: int, emoji: str, user_id: int, user_name: str):
+    if bot.user and int(user_id) == bot.user.id:
+        return
+    if emoji not in (APPROVE_EMOJI, REJECT_EMOJI):
+        return
+
+    booking = booking_service.get_by_message_id(int(message_id))
+    if booking is None:
+        return
+
+    if emoji == APPROVE_EMOJI:
+        booking_service.approve(int(message_id), int(user_id), user_name)
+        log.info(f"[booking] User {user_id} approve booking {booking['id']}")
+    else:
+        booking_service.reject(int(message_id), int(user_id), user_name)
+        log.info(f"[booking] User {user_id} reject booking {booking['id']}")
+
+
+@bot.event
+async def on_raw_reaction_add(payload):
+    if bot.user and payload.user_id == bot.user.id:
+        return
+    user_name = await _get_user_name(payload.user_id, getattr(payload, "member", None))
+    await _handle_booking_reaction(
+        message_id=payload.message_id,
+        emoji=str(payload.emoji),
+        user_id=payload.user_id,
+        user_name=user_name,
+    )
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 async def send_long(ctx, text: str, chunk_size: int = 1900):
@@ -381,6 +475,128 @@ async def send_long(ctx, text: str, chunk_size: int = 1900):
             delay = random.uniform(_SEND_JITTER_MIN, _SEND_JITTER_MAX)
             log.debug(f"[send_long] Jitter delay {delay:.2f}s trước chunk tiếp theo...")
             await asyncio.sleep(delay)
+
+
+def _build_booking_embed(booking: dict) -> discord.Embed:
+    embed = discord.Embed(
+        title="📅 Lịch hẹn mới",
+        description="Bấm reaction bên dưới để xác nhận tham gia hoặc từ chối.",
+        color=0x2ECC71,
+    )
+    embed.add_field(name="Sự kiện", value=booking["event_name"], inline=False)
+    embed.add_field(name="Thời gian", value=booking_service.format_event_time(booking), inline=True)
+    embed.add_field(name="Địa điểm", value=booking["location"], inline=True)
+    embed.add_field(name="Người tạo", value=booking["created_by_name"], inline=True)
+    embed.set_footer(text=f"{APPROVE_EMOJI} Xác nhận | {REJECT_EMOJI} Từ chối")
+    return embed
+
+
+def _build_booking_text(booking: dict) -> str:
+    return (
+        "📅 **LỊCH HẸN MỚI**\n"
+        f"**Sự kiện:** {booking['event_name']}\n"
+        f"**Thời gian:** {booking_service.format_event_time(booking)}\n"
+        f"**Địa điểm:** {booking['location']}\n"
+        f"**Người tạo:** {booking['created_by_name']}\n\n"
+        f"Bấm {APPROVE_EMOJI} để xác nhận tham gia hoặc {REJECT_EMOJI} để từ chối."
+    )
+
+
+async def _send_booking_card(ctx, booking: dict):
+    try:
+        return await ctx.send(embed=_build_booking_embed(booking))
+    except Exception as e:
+        log.warning(f"[booking] Không gửi được embed, fallback sang text: {e}")
+        return await ctx.send(_build_booking_text(booking))
+
+
+def _format_booking_user_names(users: dict, max_names: int = 6) -> str:
+    if not users:
+        return "Chưa có"
+
+    names = []
+    for user_id, payload in users.items():
+        if isinstance(payload, dict):
+            name = payload.get("name") or str(user_id)
+        else:
+            name = str(user_id)
+        names.append(str(name).replace("\n", " ").strip())
+
+    if len(names) > max_names:
+        remaining = len(names) - max_names
+        return f"{', '.join(names[:max_names])} và {remaining} người khác"
+    return ", ".join(names)
+
+
+def _format_booking_time_delta(booking: dict) -> tuple[str, str]:
+    now = datetime.now().astimezone()
+    event_time = booking_service.parse_event_time(booking)
+    seconds = int((event_time - now).total_seconds())
+
+    if seconds <= 0:
+        elapsed = abs(seconds)
+        days, rem = divmod(elapsed, 86400)
+        hours, rem = divmod(rem, 3600)
+        minutes = rem // 60
+        if days:
+            return "Đã qua", f"đã qua {days} ngày {hours} giờ"
+        if hours:
+            return "Đã qua", f"đã qua {hours} giờ {minutes} phút"
+        return "Đã qua", f"đã qua {max(minutes, 1)} phút"
+
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes = rem // 60
+    status = "Sắp diễn ra" if seconds <= 3600 else "Sắp tới"
+    if days:
+        return status, f"còn {days} ngày {hours} giờ"
+    if hours:
+        return status, f"còn {hours} giờ {minutes} phút"
+    return status, f"còn {max(minutes, 1)} phút"
+
+
+def _booking_status_icon(status: str) -> str:
+    if status == "Sắp diễn ra":
+        return "🔔"
+    if status == "Sắp tới":
+        return "🟢"
+    return "⚪"
+
+
+def _build_booking_status_text(bookings: list[dict], *, include_past: bool, all_channels: bool) -> str:
+    scope = "MỌI CHANNEL" if all_channels else "CHANNEL NÀY"
+    time_scope = "TẤT CẢ LỊCH" if include_past else "LỊCH SẮP TỚI"
+    plural = "lịch" if len(bookings) != 1 else "lịch"
+    lines = [
+        f"📋 **{time_scope} - {scope}**",
+        f"Tổng: **{len(bookings)}** {plural}",
+        "",
+    ]
+
+    for idx, booking in enumerate(bookings, start=1):
+        status, remaining = _format_booking_time_delta(booking)
+        status_icon = _booking_status_icon(status)
+        approved_users = booking.get("approved_users", {})
+        rejected_users = booking.get("rejected_users", {})
+        reminder_status = "Đã gửi" if booking.get("notified_one_hour") else "Chưa gửi"
+        booking_id = str(booking.get("id", "unknown"))
+        short_id = booking_id[-8:] if len(booking_id) > 8 else booking_id
+
+        lines.extend([
+            "━━━━━━━━━━━━━━━━━━━━",
+            f"**{idx}. {booking.get('event_name', 'Không rõ sự kiện')}**",
+            f"`#{short_id}` | {status_icon} **{status}** | {remaining}",
+            f"🕒 `{booking_service.format_event_time(booking)}`",
+            f"📍 {booking.get('location', 'Không rõ')}",
+            f"⏰ Nhắc trước 1 tiếng: **{reminder_status}**",
+            f"{APPROVE_EMOJI} Approve (**{len(approved_users)}**): {_format_booking_user_names(approved_users)}",
+            f"{REJECT_EMOJI} Reject (**{len(rejected_users)}**): {_format_booking_user_names(rejected_users)}",
+        ])
+        if all_channels:
+            lines.append(f"Channel ID: `{booking.get('channel_id')}`")
+        lines.append("")
+
+    return "\n".join(lines).strip()
 
 
 def _check_cooldown(user_id: int) -> float | None:
@@ -410,6 +626,90 @@ async def _apply_channel_rate_limit(channel_id: int):
             log.info(f"[rate_limit] Channel {channel_id}: chờ {wait:.1f}s trước khi fetch...")
             await asyncio.sleep(wait)
     _channel_last_fetch[channel_id] = time.monotonic()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BOOKING - LEN LICH SU KIEN
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bot.command(name="book")
+async def book(ctx, *, booking_text: str = ""):
+    """Lệnh: .book <tên sự kiện> | <thời gian> | <địa điểm>"""
+    log.info(f"[booking] Yêu cầu tạo lịch | author={ctx.author} | raw='{booking_text}'")
+
+    try:
+        draft = booking_service.parse_booking_text(booking_text)
+    except ValueError as e:
+        await ctx.send(str(e))
+        return
+
+    booking = booking_service.build_booking(
+        draft,
+        channel_id=ctx.channel.id,
+        created_by_id=ctx.author.id,
+        created_by_name=ctx.author.name,
+    )
+
+    try:
+        booking_msg = await _send_booking_card(ctx, booking)
+    except Exception as e:
+        log.error(f"[booking] Không gửi được lịch hẹn: {e}", exc_info=True)
+        await ctx.send(f"⚠️ Không tạo được lịch hẹn: {e}")
+        return
+
+    booking["message_id"] = booking_msg.id
+    booking_service.add_booking(booking)
+
+    for emoji in (APPROVE_EMOJI, REJECT_EMOJI):
+        try:
+            await booking_msg.add_reaction(emoji)
+        except Exception as e:
+            log.warning(f"[booking] Không add được reaction {emoji}: {e}")
+
+    log.info(f"[booking] Đã tạo booking {booking['id']} | message_id={booking_msg.id}")
+
+
+@bot.command(name="checklich", aliases=["lich", "bookings", "checkbook"])
+async def checklich(ctx, *, options: str = ""):
+    """Lệnh: .checklich [all] [global] - xem tình trạng các lịch."""
+    raw_options = options.strip().lower()
+    tokens = set(raw_options.split()) if raw_options else set()
+
+    include_past = bool(tokens & {"all", "tatca", "tat_ca", "past", "history"})
+    all_channels = bool(tokens & {"global", "allchannels", "allchannel", "all_channels"})
+
+    unknown_options = tokens - {
+        "all", "tatca", "tat_ca", "past", "history",
+        "global", "allchannels", "allchannel", "all_channels",
+    }
+    if unknown_options:
+        await ctx.send(
+            "Cú pháp: `.checklich [all] [global]`\n"
+            "`all` để hiện cả lịch đã qua, `global` để hiện lịch ở mọi channel đã lưu."
+        )
+        return
+
+    channel_id = None if all_channels else ctx.channel.id
+    bookings = booking_service.list_bookings(
+        channel_id=channel_id,
+        include_past=include_past,
+    )
+
+    if not bookings:
+        scope = "mọi channel" if all_channels else "channel này"
+        time_scope = "lịch nào" if include_past else "lịch sắp tới nào"
+        await ctx.send(f"📋 Hiện chưa có {time_scope} trong {scope}.")
+        return
+
+    await send_long(
+        ctx,
+        _build_booking_status_text(
+            bookings,
+            include_past=include_past,
+            all_channels=all_channels,
+        ),
+    )
+    log.info(f"[booking] Đã gửi tình trạng {len(bookings)} booking cho channel {ctx.channel.id}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
