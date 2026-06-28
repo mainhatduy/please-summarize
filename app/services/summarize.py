@@ -46,7 +46,7 @@ class SummarizeService:
     def generate_drama_question(self, messages: list[str], target_name: str) -> str:
         if not messages:
             log.warning("generate_drama_question() được gọi với danh sách tin nhắn rỗng.")
-            return "Trời ơi, không có ai nói gì để mình lấy cớ thả thính cả..."
+            return "Trời ơi, không có ai nói gì để mình lấy cớ khơi drama cả..."
 
         prompt = build_drama_question_prompt(messages, target_name)
         log.debug(f"Prompt drama đã build: {len(messages)} tin nhắn, ~{len(prompt)} ký tự – đang gọi Gemini ({self.model})...")

@@ -482,7 +482,7 @@ async def help_cmd(ctx):
         "`.rutque <câu hỏi>` (hoặc `.rq`) – Rút quẻ Kinh Dịch\n"
         "`.luachon <câu hỏi và các lựa chọn>` (hoặc `.lc`) – Kinh Dịch đưa ra quyết định\n"
         "`.thongke_kinhdich [@user]` (hoặc `.tk_kd`) – Thống kê & luận giải Kinh Dịch trong ngày\n"
-        "`.cau_hoi` – Tạo câu hỏi drama/thả thính tự động lấy ngữ cảnh cho 1 user ngẫu nhiên trong 4h qua\n"
+        "`.cau_hoi` – Tạo câu hỏi drama/cà khịa tự động lấy ngữ cảnh cho 1 user ngẫu nhiên trong 4h qua\n"
         "`.play <tên bài/link YouTube>` – Phát nhạc trong voice\n"
         "`.next` – Chuyển sang bài hát tiếp theo trong hàng đợi\n"
         "`.queue` – Xem danh sách hàng đợi nhạc\n"
@@ -700,7 +700,7 @@ async def tomtat_time(ctx, *args):
 
 @bot.command(name="cau_hoi")
 async def cau_hoi(ctx, *args):
-    """Lệnh: .cau_hoi – Tạo câu hỏi drama/thả thính tự động lấy ngữ cảnh cho 1 user ngẫu nhiên trong 4h qua"""
+    """Lệnh: .cau_hoi – Tạo câu hỏi drama/cà khịa tự động lấy ngữ cảnh cho 1 user ngẫu nhiên trong 4h qua"""
     log.info(f"[cau_hoi] Yêu cầu tạo câu hỏi drama | channel_id={ctx.channel.id}")
 
     # Kiểm tra cooldown
