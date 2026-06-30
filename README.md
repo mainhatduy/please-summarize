@@ -147,6 +147,7 @@ docker rm -f discord-bot
 docker run -d \
   --name discord-bot \
   --env-file .env \
+  -e TZ=Asia/Ho_Chi_Minh \
   --restart unless-stopped \
   discord-summarizer-bot
 ```
