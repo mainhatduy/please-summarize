@@ -17,17 +17,17 @@ log = logging.getLogger("bot.fortune")
 from dataclasses import dataclass
 from datetime import date, datetime
 
-
 # ── Cấu hình Tier ─────────────────────────────────────────────────────────────
+
 
 @dataclass
 class Tier:
-    name: str          # SSS, S, A, B, C, D
-    label: str         # Tên đầy đủ
-    weight: int        # Tỷ lệ xuất hiện (tổng = 100)
-    color: int         # Màu Discord Embed (hex int)
-    animals: list[str] # Danh sách động vật kèm emoji
-    fortune_msg: str   # Lời bình vận may
+    name: str  # SSS, S, A, B, C, D
+    label: str  # Tên đầy đủ
+    weight: int  # Tỷ lệ xuất hiện (tổng = 100)
+    color: int  # Màu Discord Embed (hex int)
+    animals: list[str]  # Danh sách động vật kèm emoji
+    fortune_msg: str  # Lời bình vận may
 
 
 TIERS: list[Tier] = [
@@ -129,7 +129,7 @@ TIERS: list[Tier] = [
             "🐛 Sâu Đen Bất Hạnh",
         ],
         fortune_msg=(
-            "**\"Chúa tể hẩm hiu\" đã giáng thế!** 💀\n"
+            '**"Chúa tể hẩm hiu" đã giáng thế!** 💀\n'
             "Khuyến cáo: ở nhà đắp chăn ngủ, đừng làm gì cả. "
             "Tránh xa ví tiền, tránh xa crush, tránh xa mọi quyết định hôm nay."
         ),
@@ -144,7 +144,7 @@ _TIER_WEIGHTS = [t.weight for t in TIERS]
 HISTORY_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "database",
-    "fortune_history.json"
+    "fortune_history.json",
 )
 
 
@@ -172,7 +172,7 @@ def save_history(history: dict[str, str]):
 class FortuneResult:
     tier: Tier
     animal: str
-    fortune_msg: str = ""       # Lời bình do Gemini sinh
+    fortune_msg: str = ""  # Lời bình do Gemini sinh
     already_rolled: bool = False
 
 
@@ -190,7 +190,9 @@ class FortuneService:
 
         chat_log = "\n".join(messages)
         # Tách bỏ emoji ở đầu tên động vật (ví dụ "🐉 Rồng Phương Đông" -> "Rồng Phương Đông")
-        animal_name = " ".join(animal.split()[1:]) if len(animal.split()) > 1 else animal
+        animal_name = (
+            " ".join(animal.split()[1:]) if len(animal.split()) > 1 else animal
+        )
         prompt = (
             f"Bạn là nhà tiên tri hài hước trên Discord.\n"
             f"User vừa roll được Tier **{tier.name}** ({tier.label.strip()}) – {animal_name} bản mệnh.\n"
@@ -229,7 +231,9 @@ class FortuneService:
                 if last_roll_dt.date() == today:
                     return FortuneResult(tier=None, animal="", already_rolled=True)  # type: ignore[arg-type]
             except Exception as e:
-                log.error(f"[fortune] Lỗi khi parse thời gian roll cũ của user {user_id}: {e}")
+                log.error(
+                    f"[fortune] Lỗi khi parse thời gian roll cũ của user {user_id}: {e}"
+                )
 
         secure_random = random.SystemRandom()
         tier: Tier = secure_random.choices(TIERS, weights=_TIER_WEIGHTS, k=1)[0]
@@ -238,7 +242,9 @@ class FortuneService:
 
         history[user_key] = datetime.now().isoformat()
         save_history(history)
-        return FortuneResult(tier=tier, animal=animal, fortune_msg=fortune_msg, already_rolled=False)
+        return FortuneResult(
+            tier=tier, animal=animal, fortune_msg=fortune_msg, already_rolled=False
+        )
 
     def get_embed(self, result: FortuneResult, author_name: str) -> dict:
         """Trả về dict tham số để tạo discord.Embed từ FortuneResult.

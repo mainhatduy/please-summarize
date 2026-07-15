@@ -15,6 +15,7 @@ log = logging.getLogger("bot.tiktok")
 
 # ── Data classes ──────────────────────────────────────────────────────────────
 
+
 @dataclass
 class TikTokResult:
     content_type: Literal["video", "slideshow"]
@@ -28,12 +29,13 @@ class TikTokResult:
 
 # ── Service ───────────────────────────────────────────────────────────────────
 
+
 class TikTokService:
     """Xử lý download video/ảnh từ link TikTok qua TikWM API."""
 
     # Regex bắt các dạng URL TikTok phổ biến
     TIKTOK_URL_PATTERN = re.compile(
-        r'https?://(?:(?:www|vm|vt)\.)?tiktok\.com/\S+',
+        r"https?://(?:(?:www|vm|vt)\.)?tiktok\.com/\S+",
         re.IGNORECASE,
     )
 
@@ -101,9 +103,14 @@ class TikTokService:
         """Dùng ffprobe kiểm tra video có phải codec H.265/HEVC không."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                "ffprobe", "-v", "quiet",
-                "-print_format", "json",
-                "-show_streams", "-select_streams", "v:0",
+                "ffprobe",
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
+                "-show_streams",
+                "-select_streams",
+                "v:0",
                 file_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -121,8 +128,11 @@ class TikTokService:
         """Lấy duration (giây) của video bằng ffprobe."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                "ffprobe", "-v", "quiet",
-                "-print_format", "json",
+                "ffprobe",
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
                 "-show_format",
                 file_path,
                 stdout=asyncio.subprocess.PIPE,
@@ -141,10 +151,22 @@ class TikTokService:
         log.info(f"[tiktok] Convert codec H.265 → H.264: {os.path.basename(src)}")
 
         proc = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-y", "-i", src,
-            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-            "-c:a", "aac", "-b:a", "128k",
-            "-movflags", "+faststart",
+            "ffmpeg",
+            "-y",
+            "-i",
+            src,
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-crf",
+            "23",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-movflags",
+            "+faststart",
             dst,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -152,7 +174,9 @@ class TikTokService:
         _, stderr = await proc.communicate()
 
         if proc.returncode != 0:
-            log.error(f"[tiktok] Convert codec failed: {stderr.decode(errors='replace')[-500:]}")
+            log.error(
+                f"[tiktok] Convert codec failed: {stderr.decode(errors='replace')[-500:]}"
+            )
             return src
 
         try:
@@ -161,7 +185,9 @@ class TikTokService:
         except OSError:
             return dst
 
-        log.info(f"[tiktok] Convert codec xong: {os.path.getsize(src) / (1024 * 1024):.1f} MB")
+        log.info(
+            f"[tiktok] Convert codec xong: {os.path.getsize(src) / (1024 * 1024):.1f} MB"
+        )
         return src
 
     async def _compress_to_fit(self, src: str) -> str:
@@ -184,14 +210,28 @@ class TikTokService:
 
         dst = src.replace(".mp4", "_compressed.mp4")
         proc = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-y", "-i", src,
-            "-vf", "scale=-2:720",
-            "-c:v", "libx264", "-preset", "ultrafast",
-            "-b:v", str(video_bitrate),
-            "-maxrate", str(video_bitrate),
-            "-bufsize", str(video_bitrate * 2),
-            "-c:a", "aac", "-b:a", "128k",
-            "-movflags", "+faststart",
+            "ffmpeg",
+            "-y",
+            "-i",
+            src,
+            "-vf",
+            "scale=-2:720",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-b:v",
+            str(video_bitrate),
+            "-maxrate",
+            str(video_bitrate),
+            "-bufsize",
+            str(video_bitrate * 2),
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-movflags",
+            "+faststart",
             dst,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -199,7 +239,9 @@ class TikTokService:
         _, stderr = await proc.communicate()
 
         if proc.returncode != 0:
-            log.error(f"[tiktok] Compress failed: {stderr.decode(errors='replace')[-500:]}")
+            log.error(
+                f"[tiktok] Compress failed: {stderr.decode(errors='replace')[-500:]}"
+            )
             return src
 
         try:
@@ -208,7 +250,9 @@ class TikTokService:
         except OSError:
             return dst
 
-        log.info(f"[tiktok] Compress xong: {os.path.getsize(src) / (1024 * 1024):.1f} MB")
+        log.info(
+            f"[tiktok] Compress xong: {os.path.getsize(src) / (1024 * 1024):.1f} MB"
+        )
         return src
 
     async def _ensure_discord_ready(self, file_path: str) -> str:
@@ -223,7 +267,9 @@ class TikTokService:
 
         # Case 1: đã OK
         if not is_h265 and file_size_mb <= self._DISCORD_MAX_MB:
-            log.debug(f"[tiktok] Video OK (H.264, {file_size_mb:.1f}MB) → gửi trực tiếp")
+            log.debug(
+                f"[tiktok] Video OK (H.264, {file_size_mb:.1f}MB) → gửi trực tiếp"
+            )
             return file_path
 
         # Case 2: chỉ cần convert codec
@@ -336,7 +382,9 @@ class TikTokService:
                     elif "webp" in content_type:
                         ext = ".webp"
 
-                    file_path = os.path.join(self._download_dir, f"slide_{idx:03d}{ext}")
+                    file_path = os.path.join(
+                        self._download_dir, f"slide_{idx:03d}{ext}"
+                    )
                     with open(file_path, "wb") as f:
                         f.write(resp.content)
 
@@ -371,7 +419,9 @@ class TikTokService:
                 "no_warnings": True,
                 "nocheckcertificate": True,
                 "source_address": "0.0.0.0",
-                "extractor_args": {"tiktok": {"api_hostname": ["api22-normal-c-useast2a.tiktokv.com"]}},
+                "extractor_args": {
+                    "tiktok": {"api_hostname": ["api22-normal-c-useast2a.tiktokv.com"]}
+                },
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -386,10 +436,16 @@ class TikTokService:
         if os.path.exists(file_path):
             file_path = await self._ensure_discord_ready(file_path)
 
-        file_size_mb = os.path.getsize(file_path) / (1024 * 1024) if os.path.exists(file_path) else 0
+        file_size_mb = (
+            os.path.getsize(file_path) / (1024 * 1024)
+            if os.path.exists(file_path)
+            else 0
+        )
         direct_url = info.get("webpage_url") or info.get("url") or url
 
-        log.info(f"[tiktok] yt-dlp video downloaded: {file_path} ({file_size_mb:.1f} MB)")
+        log.info(
+            f"[tiktok] yt-dlp video downloaded: {file_path} ({file_size_mb:.1f} MB)"
+        )
 
         return TikTokResult(
             content_type="video",

@@ -2,11 +2,10 @@ from typing import Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore"
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
     MODEL_NAME: str = Field(default="gemini-2.5-flash")
@@ -14,6 +13,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = Field(default="")
     CHANNEL_ID: Optional[int] = Field(default=None)
     DISCORD_WEBHOOK_URL: Optional[str] = Field(default=None)
+
 
 # Create a singleton instance for backward compatibility
 Config = Settings()
