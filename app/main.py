@@ -1464,16 +1464,20 @@ async def show_queue(ctx):
 # ══════════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     is_placeholder_discord = (
-        not Config.DISCORD_TOKEN or "your_discord_bot_token" in Config.DISCORD_TOKEN
+        not Config.DISCORD_TOKEN
+        or "your_discord" in Config.DISCORD_TOKEN.lower()
+        or len(Config.DISCORD_TOKEN.strip()) < 20
     )
     is_placeholder_gemini = (
-        not Config.GEMINI_API_KEY or "your_gemini_api_key" in Config.GEMINI_API_KEY
+        not Config.GEMINI_API_KEY
+        or "your_gemini" in Config.GEMINI_API_KEY.lower()
     )
 
     if is_placeholder_discord or is_placeholder_gemini:
         log.critical(
-            "Vui lòng thiết lập DISCORD_TOKEN và GEMINI_API_KEY thực tế trong file .env"
+            f"Vui lòng thiết lập DISCORD_TOKEN và GEMINI_API_KEY hợp lệ! (DISCORD_TOKEN='{Config.DISCORD_TOKEN[:10]}...')"
         )
     else:
         log.info("Đang khởi động bot...")
-        bot.run(Config.DISCORD_TOKEN)
+        bot.run(Config.DISCORD_TOKEN.strip())
+
