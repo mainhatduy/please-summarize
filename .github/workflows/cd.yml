@@ -11,10 +11,15 @@ jobs:
     steps:
       - name: Deploy to Production
         uses: appleboy/ssh-action@master
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MODEL_NAME: ${{ vars.MODEL_NAME }}
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           password: ${{ secrets.PASSWORD }}
+          envs: DISCORD_TOKEN,GEMINI_API_KEY,MODEL_NAME
           script: |
             cd /root/app/please-summarize
 
@@ -27,7 +32,9 @@ jobs:
 
             docker run -d \
               --name discord-bot \
-              --env-file .env \
+              -e DISCORD_TOKEN="$DISCORD_TOKEN" \
+              -e GEMINI_API_KEY="$GEMINI_API_KEY" \
+              -e MODEL_NAME="$MODEL_NAME" \
               -e TZ=Asia/Ho_Chi_Minh \
               --restart unless-stopped \
               discord-summarizer-bot
