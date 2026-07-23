@@ -11,16 +11,15 @@ jobs:
     steps:
       - name: Deploy to Production
         uses: appleboy/ssh-action@master
-        env:
-          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          MODEL_NAME: ${{ vars.MODEL_NAME }}
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           password: ${{ secrets.PASSWORD }}
-          envs: DISCORD_TOKEN,GEMINI_API_KEY,MODEL_NAME
           script: |
+            export DISCORD_TOKEN="${{ secrets.DISCORD_TOKEN }}"
+            export GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
+            export MODEL_NAME="${{ vars.MODEL_NAME }}"
+
             cd /root/app/please-summarize
 
             git pull origin main
