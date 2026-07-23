@@ -10,6 +10,7 @@ def build_summary_prompt(messages: list[str]) -> str:
         "Tóm tắt:"
     )
 
+
 def build_drama_question_prompt(messages: list[str], target_name: str) -> str:
     """Tạo prompt để tự động lấy chủ đề và tạo câu hỏi drama/thả thính cho một user."""
     chat_log = "\n".join(messages)
@@ -35,4 +36,3 @@ def build_drama_question_prompt(messages: list[str], target_name: str) -> str:
         "- 'Bạn có đang \"deploy trái tim\" lên production không?' – ghép thuật ngữ IT vào tình cảm một cách gượng gạo.\n\n"
         "CHỈ trả về đúng câu hỏi (được phép dùng emoji). Trả lời bằng tiếng Việt.\n"
     )
-

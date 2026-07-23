@@ -49,7 +49,7 @@ class XinKeoService:
             "keo2": keo2,
             "icon1": icon1,
             "icon2": icon2,
-            "result": result
+            "result": result,
         }
 
     def generate_luan_giai(self, wish: str, roll_result: dict) -> str:
@@ -60,7 +60,7 @@ class XinKeoService:
         fallback_map = {
             "Keo Âm": "Thần linh chưa chứng giám cho lời khấn nguyện này của bạn. Hãy bình tâm, gột rửa mọi tạp niệm và thành kính xin cầu lại để tỏ rõ tấm lòng thành.",
             "Keo Dương": "Thần linh chưa đồng ý với tâm nguyện hiện tại. Có thể thời điểm chưa chín muồi hoặc ước nguyện chưa thích hợp, bạn nên suy xét kỹ lại và kiên nhẫn chờ đợi.",
-            "Keo Âm Dương": "Nguyện vọng của bạn đã được thần linh chứng giám và đồng ý. Hãy tiếp tục giữ tâm thành ý thiện, nỗ lực hết mình để mong ước sớm ngày thành hiện thực."
+            "Keo Âm Dương": "Nguyện vọng của bạn đã được thần linh chứng giám và đồng ý. Hãy tiếp tục giữ tâm thành ý thiện, nỗ lực hết mình để mong ước sớm ngày thành hiện thực.",
         }
         fallback = fallback_map.get(result_type, "")
 
@@ -70,11 +70,11 @@ class XinKeoService:
         # Xây dựng prompt cho Gemini
         prompt = (
             "Bạn là một bậc trưởng thượng am hiểu tâm linh dân gian Việt Nam, có giọng văn trang trọng, bình tĩnh, ấm áp và thành kính.\n"
-            f"Người dùng vừa thực hiện nghi lễ xin keo với lời khấn sau: \"{wish}\"\n"
+            f'Người dùng vừa thực hiện nghi lễ xin keo với lời khấn sau: "{wish}"\n'
             f"Kết quả xin keo nhận được là: **{result_type}**.\n\n"
             "Hãy viết một đoạn luận giải ngắn gọn từ 2 đến 4 câu theo nguyên tắc sau:\n"
-            "- Nếu là \"Keo Âm Dương\": Hãy khuyến khích, xác nhận nguyện vọng đã được chứng giám và đồng ý, nhắn nhủ người cầu tiếp tục giữ tâm thành ý thiện và nỗ lực hành động.\n"
-            "- Nếu là \"Keo Âm\" hoặc \"Keo Dương\": Hãy an ủi nhẹ nhàng, khuyên người cầu hãy thành tâm cầu lại hoặc xem xét kỹ lại tâm nguyện của bản thân. Tuyệt đối không phán xét, không dọa dẫm hay gây lo lắng.\n"
+            '- Nếu là "Keo Âm Dương": Hãy khuyến khích, xác nhận nguyện vọng đã được chứng giám và đồng ý, nhắn nhủ người cầu tiếp tục giữ tâm thành ý thiện và nỗ lực hành động.\n'
+            '- Nếu là "Keo Âm" hoặc "Keo Dương": Hãy an ủi nhẹ nhàng, khuyên người cầu hãy thành tâm cầu lại hoặc xem xét kỹ lại tâm nguyện của bản thân. Tuyệt đối không phán xét, không dọa dẫm hay gây lo lắng.\n'
             "- Luận giải phải liên quan trực tiếp đến nội dung lời khấn cụ thể của người dùng.\n\n"
             "Yêu cầu đặc biệt: Chỉ trả về duy nhất đoạn văn luận giải bằng tiếng Việt, không thêm bất cứ tiêu đề, lời mở đầu, hay ký hiệu đặc biệt nào khác."
         )
