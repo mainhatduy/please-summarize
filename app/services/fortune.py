@@ -6,16 +6,18 @@ Kết quả gồm: Tier (SSS→D), tên động vật bản mệnh, và lời b�
 dựa trên 77 tin nhắn gần nhất của user trong kênh.
 """
 
-import logging
-import random
-import os
 import json
+import logging
+import os
+import random
+from dataclasses import dataclass
+from datetime import date, datetime
+
 from google import genai
+
 from app.core.config import Config
 
 log = logging.getLogger("bot.fortune")
-from dataclasses import dataclass
-from datetime import date, datetime
 
 # ── Cấu hình Tier ─────────────────────────────────────────────────────────────
 
@@ -152,7 +154,7 @@ def load_history() -> dict[str, str]:
     if not os.path.exists(HISTORY_FILE):
         return {}
     try:
-        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+        with open(HISTORY_FILE, encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         log.error(f"[fortune] Lỗi khi load history file: {e}")

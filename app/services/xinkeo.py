@@ -13,7 +13,9 @@ Bảng kết quả:
 
 import logging
 import random
+
 from google import genai
+
 from app.core.config import Config
 
 log = logging.getLogger("bot.xinkeo")

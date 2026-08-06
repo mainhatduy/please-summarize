@@ -6,3 +6,6 @@ venv
 app/database/fortune_history.json
 *.ipynb
 draft
+.ruff_cache
+.pytest_cache
+.coverage

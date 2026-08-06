@@ -6,13 +6,15 @@ Mỗi quẻ gồm: số, tên đầy đủ, tên ngắn, Hán tự, ngoại quá
 nhóm tượng, ngũ hành, mức cát/hung, và triệu (lời đoán).
 """
 
+import hashlib
 import logging
 import random
 import re
 import time
-import hashlib
+
 import httpx
 from google import genai
+
 from app.core.config import Config
 
 log = logging.getLogger("bot.kinhdich")
