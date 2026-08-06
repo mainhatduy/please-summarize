@@ -1,5 +1,6 @@
-import yt_dlp
 import asyncio
+
+import yt_dlp
 
 
 class MusicService:

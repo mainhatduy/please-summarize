@@ -59,6 +59,35 @@ Use `uv` to install all dependencies from `requirements.txt`:
 uv pip install -r requirements.txt
 ```
 
+### Development checks
+
+Install the development dependencies and Git hooks once:
+
+```bash
+uv sync --group dev
+uv run pre-commit install
+```
+
+The hooks enforce two stages:
+
+- `git commit`: run Ruff and the non-AI unit tests.
+- `git push`: run the real Gemini integration tests. A valid `GEMINI_API_KEY`
+  must exist in the local `.env`; a missing/invalid key or failed AI feature blocks
+  the push. These tests make real API calls and may consume Gemini quota.
+
+Run the same checks manually:
+
+```bash
+uv run ruff check .
+uv run pytest tests/unit
+uv run pytest tests/ai -m ai
+uv run pre-commit run --all-files
+uv run pre-commit run --hook-stage pre-push --all-files
+```
+
+GitHub Actions only runs Ruff and `tests/unit`, so CI never needs or exposes the
+Gemini API key.
+
 ---
 
 ## 🚀 Run the Bot

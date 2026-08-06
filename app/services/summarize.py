@@ -1,7 +1,9 @@
 import logging
+
 from google import genai
+
 from app.core.config import Config
-from app.services.prompt import build_summary_prompt, build_drama_question_prompt
+from app.services.prompt import build_drama_question_prompt, build_summary_prompt
 
 log = logging.getLogger("bot.summarize")
 

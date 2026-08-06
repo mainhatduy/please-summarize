@@ -1,0 +1,35 @@
+[project]
+name = "please-summarize"
+version = "0.1.0"
+description = "Discord group-chat summarizer and music self-bot"
+requires-python = ">=3.11"
+dependencies = [
+    "discord.py-self[voice]==2.1.0",
+    "google-genai==2.6.0",
+    "pydantic-settings==2.14.1",
+    "python-dotenv==1.2.2",
+    "yt-dlp==2026.3.17",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit==4.3.0",
+    "pytest==8.4.2",
+    "ruff==0.16.0",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["draft"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+pythonpath = ["."]
+addopts = "-ra"
+markers = [
+    "ai: integration tests that make real Gemini API calls",
+]

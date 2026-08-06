@@ -1,11 +1,11 @@
-import os
 import json
 import logging
+import os
 import random
-import time
-import hashlib
 from dataclasses import dataclass
+
 from google import genai
+
 from app.core.config import Config
 
 log = logging.getLogger("bot.tarot")
@@ -61,7 +61,7 @@ class TarotService:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         db_path = os.path.join(current_dir, "..", "database", "cards_data.json")
         try:
-            with open(db_path, "r", encoding="utf-8") as f:
+            with open(db_path, encoding="utf-8") as f:
                 self.cards_data = json.load(f)
             log.info(
                 f"Loaded tarot card database from {db_path}. Total cards: {len(self.cards_data)}"
@@ -326,7 +326,6 @@ class TarotService:
         )
 
         try:
-            print(prompt)
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=prompt,

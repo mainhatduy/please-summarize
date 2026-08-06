@@ -2,7 +2,7 @@
 
 import asyncio
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.bot.helpers import apply_channel_rate_limit, check_cooldown, send_long
 from app.bot.logging import log
@@ -112,7 +112,7 @@ async def tomtat_time(ctx, *args):
         await ctx.send("Vui lòng nhập số giờ hợp lệ (từ 0.1 đến 12).")
         return
 
-    after_time = datetime.now(timezone.utc) - timedelta(hours=hours)
+    after_time = datetime.now(UTC) - timedelta(hours=hours)
     await apply_channel_rate_limit(ctx.channel.id)
     messages = []
     skipped = skipped_bots = 0
@@ -158,7 +158,7 @@ async def cau_hoi(ctx, *args):
         await ctx.send(f"⏳ Bạn cần chờ **{remaining:.0f} giây** nữa để dùng lệnh này.")
         return
 
-    after_time = datetime.now(timezone.utc) - timedelta(hours=4)
+    after_time = datetime.now(UTC) - timedelta(hours=4)
     await apply_channel_rate_limit(ctx.channel.id)
     messages = []
     active_users = {}

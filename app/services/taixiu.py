@@ -46,7 +46,6 @@ class TaiXiuService:
     def get_result_text(self, author_name: str, result: dict) -> str:
         """Trả về chuỗi kết quả đã được format đẹp mắt để gửi qua Discord."""
         dice_str = "  ".join(result["emojis"])
-        rolls_detail = " + ".join(map(str, result["rolls"]))
 
         if result["is_triple"]:
             # Ví dụ: Bão (⚂ ⚂ ⚂)

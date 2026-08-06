@@ -1,7 +1,7 @@
 """I Ching commands."""
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 from app.bot.helpers import apply_channel_rate_limit, send_long
 from app.bot.logging import log
@@ -105,9 +105,9 @@ async def thongke_kinhdich(ctx, *, target_str: str = ""):
         return
 
     vn_timezone = timezone(timedelta(hours=7))
-    now_vn = datetime.now(timezone.utc).astimezone(vn_timezone)
+    now_vn = datetime.now(UTC).astimezone(vn_timezone)
     start_of_day = now_vn.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(
-        timezone.utc
+        UTC
     )
     await apply_channel_rate_limit(ctx.channel.id)
     display_name = target_str or (f"@{target_name}" if target_name else "bạn")
