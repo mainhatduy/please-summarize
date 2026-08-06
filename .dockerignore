@@ -1,0 +1,55 @@
+# Version control
+.git/
+.github/
+.gitignore
+
+# Local tooling
+.agents/
+.codex/
+.idea/
+.vscode/
+.pre-commit-config.yaml
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.nox/
+.coverage
+coverage.xml
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Tests, drafts, and documentation
+tests/
+draft/
+*.ipynb
+README.md
+pyproject.toml
+requirements-dev.txt
+uv.lock
+
+# Local runtime data and logs
+app/database/fortune_history.json
+*.log
+.DS_Store
+
+# Docker metadata is not needed inside the image
+Dockerfile*
+.dockerignore
