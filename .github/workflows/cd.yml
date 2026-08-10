@@ -1,8 +1,8 @@
 name: Deploy IT-Recruitment Application
 
 on:
-  push:
-    branches: ["main"]
+  release:
+    types: [published]
 
 jobs:
   build-and-deploy:
