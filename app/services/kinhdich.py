@@ -1003,9 +1003,7 @@ class KinhDichService:
             return result or "Quẻ dịch đang ẩn mình, xin hãy thử lại sau..."
         except Exception as e:
             log.error(f"[kinhdich] Lỗi khi gọi Gemini: {e}", exc_info=True)
-            return (
-                "Đã có lỗi xảy ra khi luận giải quẻ dịch (Lỗi AI). Xin hãy thử lại sau."
-            )
+            return "Đã có lỗi xảy ra khi luận giải quẻ dịch (Lỗi AI). Xin hãy thử lại sau."
 
     def generate_choice_reading(
         self, question_and_choices: str, hexagram: dict, user_name: str
@@ -1053,9 +1051,7 @@ class KinhDichService:
             return result or "Quẻ dịch đang ẩn mình, xin hãy thử lại sau..."
         except Exception as e:
             log.error(f"[kinhdich] Lỗi khi gọi Gemini: {e}", exc_info=True)
-            return (
-                "Đã có lỗi xảy ra khi luận giải quẻ dịch (Lỗi AI). Xin hãy thử lại sau."
-            )
+            return "Đã có lỗi xảy ra khi luận giải quẻ dịch (Lỗi AI). Xin hãy thử lại sau."
 
     def generate_thongke(self, user_name: str, history_texts: list[str]) -> str:
         """Gọi Gemini để tổng hợp và luận giải các lần gieo quẻ trong ngày của user."""

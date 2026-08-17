@@ -206,9 +206,7 @@ class TikTokService:
                     elif "webp" in content_type:
                         ext = ".webp"
 
-                    file_path = os.path.join(
-                        self._download_dir, f"slide_{idx:03d}{ext}"
-                    )
+                    file_path = os.path.join(self._download_dir, f"slide_{idx:03d}{ext}")
                     with open(file_path, "wb") as f:
                         f.write(resp.content)
 
@@ -261,15 +259,11 @@ class TikTokService:
             file_path = await self._ensure_discord_ready(file_path)
 
         file_size_mb = (
-            os.path.getsize(file_path) / (1024 * 1024)
-            if os.path.exists(file_path)
-            else 0
+            os.path.getsize(file_path) / (1024 * 1024) if os.path.exists(file_path) else 0
         )
         direct_url = info.get("webpage_url") or info.get("url") or url
 
-        log.info(
-            f"[tiktok] yt-dlp video downloaded: {file_path} ({file_size_mb:.1f} MB)"
-        )
+        log.info(f"[tiktok] yt-dlp video downloaded: {file_path} ({file_size_mb:.1f} MB)")
 
         return TikTokResult(
             content_type="video",

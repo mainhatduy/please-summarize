@@ -15,15 +15,18 @@ import app.bot.facebook as facebook_handler  # noqa: E402
 def test_detect_facebook_reel_url_supports_reel_and_share_links() -> None:
     service = FacebookService.__new__(FacebookService)
 
-    assert service.detect_facebook_reel_url(
-        "xem https://www.facebook.com/reel/2281511879286424 nhé"
-    ) == "https://www.facebook.com/reel/2281511879286424"
-    assert service.detect_facebook_reel_url(
-        "https://m.facebook.com/share/r/AbC_123-x/?mibextid=abc"
-    ) == "https://m.facebook.com/share/r/AbC_123-x/?mibextid=abc"
-    assert service.detect_facebook_reel_url(
-        "(https://mbasic.facebook.com/reel/12345/)"
-    ) == "https://mbasic.facebook.com/reel/12345/"
+    assert (
+        service.detect_facebook_reel_url("xem https://www.facebook.com/reel/2281511879286424 nhé")
+        == "https://www.facebook.com/reel/2281511879286424"
+    )
+    assert (
+        service.detect_facebook_reel_url("https://m.facebook.com/share/r/AbC_123-x/?mibextid=abc")
+        == "https://m.facebook.com/share/r/AbC_123-x/?mibextid=abc"
+    )
+    assert (
+        service.detect_facebook_reel_url("(https://mbasic.facebook.com/reel/12345/)")
+        == "https://mbasic.facebook.com/reel/12345/"
+    )
 
 
 def test_detect_facebook_reel_url_rejects_other_urls() -> None:
@@ -72,9 +75,7 @@ def test_download_uses_ytdlp_without_cookies(monkeypatch, tmp_path) -> None:
         return file_path
 
     monkeypatch.setattr(facebook_module.yt_dlp, "YoutubeDL", FakeYoutubeDL)
-    monkeypatch.setattr(
-        facebook_module, "ensure_discord_ready", fake_ensure_discord_ready
-    )
+    monkeypatch.setattr(facebook_module, "ensure_discord_ready", fake_ensure_discord_ready)
 
     service = FacebookService()
     service._download_dir = str(tmp_path)
@@ -102,9 +103,7 @@ def test_small_video_is_kept_when_ffprobe_is_unavailable(monkeypatch, tmp_path) 
     async def missing_binary(*args, **kwargs):
         raise FileNotFoundError("ffprobe")
 
-    monkeypatch.setattr(
-        video_module.asyncio, "create_subprocess_exec", missing_binary
-    )
+    monkeypatch.setattr(video_module.asyncio, "create_subprocess_exec", missing_binary)
 
     result = asyncio.run(
         video_module.ensure_discord_ready(
@@ -146,9 +145,7 @@ def test_handle_facebook_reel_sends_file_and_cleans_up(monkeypatch, tmp_path) ->
     service.cleanup.assert_called_once_with(str(file_path))
 
 
-def test_handle_facebook_reel_falls_back_to_url_when_too_large(
-    monkeypatch, tmp_path
-) -> None:
+def test_handle_facebook_reel_falls_back_to_url_when_too_large(monkeypatch, tmp_path) -> None:
     file_path = tmp_path / "large.mp4"
     file_path.write_bytes(b"video")
     url = "https://www.facebook.com/reel/2281511879286424"

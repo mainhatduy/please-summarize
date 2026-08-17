@@ -68,11 +68,7 @@ class FacebookService:
 
                 requested_downloads = info.get("requested_downloads") or []
                 file_path = next(
-                    (
-                        item.get("filepath")
-                        for item in requested_downloads
-                        if item.get("filepath")
-                    ),
+                    (item.get("filepath") for item in requested_downloads if item.get("filepath")),
                     None,
                 )
                 file_path = file_path or info.get("filepath") or info.get("_filename")
@@ -83,9 +79,7 @@ class FacebookService:
             if not os.path.isfile(file_path):
                 raise FileNotFoundError("yt-dlp did not create the Facebook Reel file")
 
-            file_path = await ensure_discord_ready(
-                file_path, log=log, source="facebook"
-            )
+            file_path = await ensure_discord_ready(file_path, log=log, source="facebook")
             file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
             direct_url = info.get("webpage_url") or info.get("original_url") or url
             log.info(

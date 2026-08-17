@@ -20,9 +20,7 @@ def format_queue(channel_id: int) -> str:
     queue = _song_queues.get(channel_id, [])
     if not queue:
         return "(Không có bài nào trong hàng đợi.)"
-    return "\n".join(
-        f"{index}. {item['title']}" for index, item in enumerate(queue, start=1)
-    )
+    return "\n".join(f"{index}. {item['title']}" for index, item in enumerate(queue, start=1))
 
 
 def _build_queue_text(channel_id: int, header: str = "") -> str:
@@ -77,9 +75,7 @@ def _play_after(channel_id: int, error) -> None:
     if channel_id in _skip_requests:
         _skip_requests.discard(channel_id)
         return
-    bot.loop.call_soon_threadsafe(
-        lambda: asyncio.create_task(_play_next_track(channel_id))
-    )
+    bot.loop.call_soon_threadsafe(lambda: asyncio.create_task(_play_next_track(channel_id)))
 
 
 async def _play_next_track(channel_id: int) -> None:
@@ -95,14 +91,10 @@ async def _play_next_track(channel_id: int) -> None:
     if not queue:
         _song_queues.pop(channel_id, None)
     try:
-        source = discord.FFmpegPCMAudio(
-            track["audio_url"], **music_service.ffmpeg_options
-        )
+        source = discord.FFmpegPCMAudio(track["audio_url"], **music_service.ffmpeg_options)
         voice_client.play(source, after=lambda error: _play_after(channel_id, error))
         _currently_playing[channel_id] = track
-        await _update_queue_message(
-            channel_id, header=f"▶️ Đang phát tiếp: **{track['title']}**"
-        )
+        await _update_queue_message(channel_id, header=f"▶️ Đang phát tiếp: **{track['title']}**")
     except Exception as error:
         log.error("[play] Lỗi khi phát bài tiếp: %s", error, exc_info=True)
         if text_channel := _queue_text_channels.get(channel_id):
@@ -116,14 +108,10 @@ def _connected_members(voice_client) -> list:
         if channel.me and channel.me.voice and channel.me.voice.channel == channel:
             members.append(channel.me)
         recipients = (
-            channel.recipients
-            if isinstance(channel, discord.GroupChannel)
-            else [channel.recipient]
+            channel.recipients if isinstance(channel, discord.GroupChannel) else [channel.recipient]
         )
         members.extend(
-            user
-            for user in recipients
-            if user and user.voice and user.voice.channel == channel
+            user for user in recipients if user and user.voice and user.voice.channel == channel
         )
         return members
     return getattr(channel, "members", [])
@@ -198,9 +186,7 @@ async def play(ctx, *, query: str):
             else:
                 voice_client = await ctx.channel.connect()
         except Exception as error:
-            await ctx.send(
-                f"Không thể kết nối vào cuộc gọi thoại để phát nhạc: {error}"
-            )
+            await ctx.send(f"Không thể kết nối vào cuộc gọi thoại để phát nhạc: {error}")
             return
 
     search_msg = await ctx.send(f"Đang tìm kiếm bài hát: `{query}`...")
@@ -220,9 +206,7 @@ async def play(ctx, *, query: str):
         track = {"query": query, "title": title, "audio_url": audio_url}
         if voice_client.is_playing():
             _song_queues.setdefault(channel_id, []).append(track)
-            await _update_queue_message(
-                channel_id, header=f"⏳ Đã thêm vào hàng đợi: **{title}**"
-            )
+            await _update_queue_message(channel_id, header=f"⏳ Đã thêm vào hàng đợi: **{title}**")
             return
         source = discord.FFmpegPCMAudio(audio_url, **music_service.ffmpeg_options)
         voice_client.play(source, after=lambda error: _play_after(channel_id, error))
@@ -237,9 +221,7 @@ async def play(ctx, *, query: str):
 async def next_track(ctx):
     voice_client = discord.utils.get(bot.voice_clients, channel=ctx.channel)
     if not voice_client or not voice_client.is_connected():
-        await ctx.send(
-            "❌ Bot không ở trong cuộc gọi thoại nào. Hãy dùng `.play` trước."
-        )
+        await ctx.send("❌ Bot không ở trong cuộc gọi thoại nào. Hãy dùng `.play` trước.")
         return
     if not voice_client.is_playing():
         await ctx.send("❌ Không có bài hát nào đang phát. Hãy dùng `.play` trước.")

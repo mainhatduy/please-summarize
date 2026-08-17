@@ -15,4 +15,3 @@ def test_build_drama_question_prompt_includes_target_and_chat() -> None:
     assert "An: Đi ăn nướng không?" in prompt
     assert "nhắm vào 'Bình'" in prompt
     assert "CHỈ trả về đúng câu hỏi" in prompt
-

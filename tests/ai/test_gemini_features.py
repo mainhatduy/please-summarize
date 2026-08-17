@@ -65,12 +65,8 @@ def test_kinhdich_feature_calls_gemini(monkeypatch: pytest.MonkeyPatch) -> None:
     service = KinhDichService()
     monkeypatch.setattr(service, "fetch_detail", lambda _slug: "")
 
-    reading = service.generate_reading(
-        "Nên tập trung điều gì tuần tới?", HEXAGRAMS[0], "Codex"
-    )
-    choice = service.generate_choice_reading(
-        "Nên đọc sách hay đi bộ?", HEXAGRAMS[0], "Codex"
-    )
+    reading = service.generate_reading("Nên tập trung điều gì tuần tới?", HEXAGRAMS[0], "Codex")
+    choice = service.generate_choice_reading("Nên đọc sách hay đi bộ?", HEXAGRAMS[0], "Codex")
     statistics = service.generate_thongke(
         "Codex", ["Quẻ Thiên Vi Càn - Đại Cát", "Tier A - Cát Tường"]
     )
@@ -78,4 +74,3 @@ def test_kinhdich_feature_calls_gemini(monkeypatch: pytest.MonkeyPatch) -> None:
     assert reading.strip() and "Lỗi AI" not in reading
     assert choice.strip() and "Lỗi AI" not in choice
     assert statistics.strip() and "Lỗi AI" not in statistics
-

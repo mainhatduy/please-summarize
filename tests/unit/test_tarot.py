@@ -41,4 +41,3 @@ def test_build_context_uses_orientation_and_category_meaning() -> None:
     assert "A bright beginning." in context
     assert "A warm connection." in context
     assert "Card B** (Ngược)" in context
-

@@ -8,9 +8,7 @@ import os
 DISCORD_TARGET_MB = 9.5
 
 
-async def _is_h265(
-    file_path: str, *, log: logging.Logger, source: str
-) -> bool | None:
+async def _is_h265(file_path: str, *, log: logging.Logger, source: str) -> bool | None:
     """Return whether the first video stream uses H.265/HEVC."""
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -193,9 +191,7 @@ async def _compress_to_fit(src: str, *, log: logging.Logger, source: str) -> str
     return src
 
 
-async def ensure_discord_ready(
-    file_path: str, *, log: logging.Logger, source: str
-) -> str:
+async def ensure_discord_ready(file_path: str, *, log: logging.Logger, source: str) -> str:
     """Ensure a video is H.264 and targets a size below 10 MB."""
     is_h265 = await _is_h265(file_path, log=log, source=source)
     file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
