@@ -1,8 +1,9 @@
 """Discord lifecycle and message events."""
 
 from app.bot.commands.music import check_alone_voice_clients
+from app.bot.facebook import handle_facebook_reel
 from app.bot.logging import log
-from app.bot.runtime import bot, tiktok_service
+from app.bot.runtime import bot, facebook_service, tiktok_service
 from app.bot.tiktok import handle_tiktok
 from app.core.config import Config
 
@@ -28,6 +29,9 @@ async def on_message(message):
     content = message.content
     if tiktok_url := tiktok_service.detect_tiktok_url(content):
         await handle_tiktok(message, tiktok_url)
+        return
+    if facebook_url := facebook_service.detect_facebook_reel_url(content):
+        await handle_facebook_reel(message, facebook_url)
         return
     prefix = bot.command_prefix
     if not content.startswith(prefix):

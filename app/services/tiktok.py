@@ -1,7 +1,6 @@
 """TikTok download service – dùng TikWM API (chính) + yt-dlp (fallback)."""
 
 import asyncio
-import json
 import logging
 import os
 import re
@@ -10,6 +9,8 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 import httpx
+
+from app.services.video import ensure_discord_ready
 
 log = logging.getLogger("bot.tiktok")
 
@@ -97,164 +98,6 @@ class TikTokService:
 
     # ── Video processing cho Discord ────────────────────────────────────────────
 
-    _DISCORD_MAX_MB = 9.5  # target dưới 10MB một chút cho an toàn
-
-    async def _is_h265(self, file_path: str) -> bool:
-        """Dùng ffprobe kiểm tra video có phải codec H.265/HEVC không."""
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "ffprobe",
-                "-v",
-                "quiet",
-                "-print_format",
-                "json",
-                "-show_streams",
-                "-select_streams",
-                "v:0",
-                file_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await proc.communicate()
-            info = json.loads(stdout)
-            codec = info.get("streams", [{}])[0].get("codec_name", "")
-            log.debug(f"[tiktok] Video codec: {codec}")
-            return codec in ("hevc", "h265")
-        except Exception as e:
-            log.warning(f"[tiktok] ffprobe check failed: {e}")
-            return True
-
-    async def _get_duration(self, file_path: str) -> float:
-        """Lấy duration (giây) của video bằng ffprobe."""
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "ffprobe",
-                "-v",
-                "quiet",
-                "-print_format",
-                "json",
-                "-show_format",
-                file_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await proc.communicate()
-            info = json.loads(stdout)
-            return float(info.get("format", {}).get("duration", 0))
-        except Exception as e:
-            log.warning(f"[tiktok] ffprobe duration failed: {e}")
-            return 0
-
-    async def _convert_codec(self, src: str) -> str:
-        """Chỉ convert H.265 → H.264, giữ nguyên resolution. Dùng CRF 23."""
-        dst = src.replace(".mp4", "_h264.mp4")
-        log.info(f"[tiktok] Convert codec H.265 → H.264: {os.path.basename(src)}")
-
-        proc = await asyncio.create_subprocess_exec(
-            "ffmpeg",
-            "-y",
-            "-i",
-            src,
-            "-c:v",
-            "libx264",
-            "-preset",
-            "ultrafast",
-            "-crf",
-            "23",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "128k",
-            "-movflags",
-            "+faststart",
-            dst,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, stderr = await proc.communicate()
-
-        if proc.returncode != 0:
-            log.error(
-                f"[tiktok] Convert codec failed: {stderr.decode(errors='replace')[-500:]}"
-            )
-            return src
-
-        try:
-            os.remove(src)
-            os.rename(dst, src)
-        except OSError:
-            return dst
-
-        log.info(
-            f"[tiktok] Convert codec xong: {os.path.getsize(src) / (1024 * 1024):.1f} MB"
-        )
-        return src
-
-    async def _compress_to_fit(self, src: str) -> str:
-        """Scale 720p + tính bitrate cho vừa Discord limit. Luôn output H.264."""
-        duration = await self._get_duration(src)
-        if duration <= 0:
-            log.warning("[tiktok] Không lấy được duration, bỏ qua compress")
-            return src
-
-        target_bits = self._DISCORD_MAX_MB * 1024 * 1024 * 8
-        audio_bitrate = 128_000
-        video_bitrate = int(target_bits / duration - audio_bitrate)
-        video_bitrate = max(video_bitrate, 100_000)
-
-        src_size = os.path.getsize(src) / (1024 * 1024)
-        log.info(
-            f"[tiktok] Compress {src_size:.1f}MB → ≤{self._DISCORD_MAX_MB}MB "
-            f"(720p, {video_bitrate // 1000}kbps, {duration:.0f}s)"
-        )
-
-        dst = src.replace(".mp4", "_compressed.mp4")
-        proc = await asyncio.create_subprocess_exec(
-            "ffmpeg",
-            "-y",
-            "-i",
-            src,
-            "-vf",
-            "scale=-2:720",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "ultrafast",
-            "-b:v",
-            str(video_bitrate),
-            "-maxrate",
-            str(video_bitrate),
-            "-bufsize",
-            str(video_bitrate * 2),
-            "-c:a",
-            "aac",
-            "-b:a",
-            "128k",
-            "-movflags",
-            "+faststart",
-            dst,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, stderr = await proc.communicate()
-
-        if proc.returncode != 0:
-            log.error(
-                f"[tiktok] Compress failed: {stderr.decode(errors='replace')[-500:]}"
-            )
-            return src
-
-        try:
-            os.remove(src)
-            os.rename(dst, src)
-        except OSError:
-            return dst
-
-        log.info(
-            f"[tiktok] Compress xong: {os.path.getsize(src) / (1024 * 1024):.1f} MB"
-        )
-        return src
-
     async def _ensure_discord_ready(self, file_path: str) -> str:
         """Đảm bảo video tương thích Discord: H.264 + ≤ 10MB.
 
@@ -262,26 +105,7 @@ class TikTokService:
         - H.265 + ≤ 10MB → convert codec giữ resolution
         - > 10MB → scale 720p + target bitrate cho vừa 9.5MB
         """
-        is_h265 = await self._is_h265(file_path)
-        file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
-
-        # Case 1: đã OK
-        if not is_h265 and file_size_mb <= self._DISCORD_MAX_MB:
-            log.debug(
-                f"[tiktok] Video OK (H.264, {file_size_mb:.1f}MB) → gửi trực tiếp"
-            )
-            return file_path
-
-        # Case 2: chỉ cần convert codec
-        if is_h265 and file_size_mb <= self._DISCORD_MAX_MB:
-            file_path = await self._convert_codec(file_path)
-            new_size = os.path.getsize(file_path) / (1024 * 1024)
-            if new_size <= self._DISCORD_MAX_MB:
-                return file_path
-            log.info(f"[tiktok] Convert xong {new_size:.1f}MB > limit → compress tiếp")
-
-        # Case 3: cần compress (file lớn hoặc convert xong vẫn lớn)
-        return await self._compress_to_fit(file_path)
+        return await ensure_discord_ready(file_path, log=log, source="tiktok")
 
     # ── TikWM API ─────────────────────────────────────────────────────────────
 
