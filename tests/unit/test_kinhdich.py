@@ -20,4 +20,3 @@ def test_format_hexagram_text_contains_core_fields() -> None:
     assert hexagram["ten"] in text
     assert hexagram["ngoai_quai"] in text
     assert hexagram["noi_quai"] in text
-

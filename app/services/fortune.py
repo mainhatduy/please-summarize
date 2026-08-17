@@ -192,9 +192,7 @@ class FortuneService:
 
         chat_log = "\n".join(messages)
         # Tách bỏ emoji ở đầu tên động vật (ví dụ "🐉 Rồng Phương Đông" -> "Rồng Phương Đông")
-        animal_name = (
-            " ".join(animal.split()[1:]) if len(animal.split()) > 1 else animal
-        )
+        animal_name = " ".join(animal.split()[1:]) if len(animal.split()) > 1 else animal
         prompt = (
             f"Bạn là nhà tiên tri hài hước trên Discord.\n"
             f"User vừa roll được Tier **{tier.name}** ({tier.label.strip()}) – {animal_name} bản mệnh.\n"
@@ -233,9 +231,7 @@ class FortuneService:
                 if last_roll_dt.date() == today:
                     return FortuneResult(tier=None, animal="", already_rolled=True)  # type: ignore[arg-type]
             except Exception as e:
-                log.error(
-                    f"[fortune] Lỗi khi parse thời gian roll cũ của user {user_id}: {e}"
-                )
+                log.error(f"[fortune] Lỗi khi parse thời gian roll cũ của user {user_id}: {e}")
 
         secure_random = random.SystemRandom()
         tier: Tier = secure_random.choices(TIERS, weights=_TIER_WEIGHTS, k=1)[0]

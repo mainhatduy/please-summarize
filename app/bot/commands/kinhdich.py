@@ -24,8 +24,7 @@ async def rutque(ctx, *, question: str = ""):
         )
         return
     wait_msg = await ctx.send(
-        f'☰ **{ctx.author.name}** đang hỏi: *"{question}"*\n'
-        "*Đang thành tâm rút quẻ Kinh Dịch...*"
+        f'☰ **{ctx.author.name}** đang hỏi: *"{question}"*\n*Đang thành tâm rút quẻ Kinh Dịch...*'
     )
     hexagram = kinhdich_service.draw_hexagram(question)
     hex_text = kinhdich_service.format_hexagram_text(hexagram)
@@ -95,25 +94,17 @@ async def thongke_kinhdich(ctx, *, target_str: str = ""):
         target_id = ctx.message.mentions[0].id
         target_name = ctx.message.mentions[0].name.lower()
     elif target_str:
-        target_name = (
-            target_str[1:].lower() if target_str.startswith("@") else target_str.lower()
-        )
+        target_name = target_str[1:].lower() if target_str.startswith("@") else target_str.lower()
     else:
-        await ctx.send(
-            "Vui lòng nhập người cần thống kê. Ví dụ: `.thongke_kinhdich @huuannnn`"
-        )
+        await ctx.send("Vui lòng nhập người cần thống kê. Ví dụ: `.thongke_kinhdich @huuannnn`")
         return
 
     vn_timezone = timezone(timedelta(hours=7))
     now_vn = datetime.now(UTC).astimezone(vn_timezone)
-    start_of_day = now_vn.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(
-        UTC
-    )
+    start_of_day = now_vn.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
     await apply_channel_rate_limit(ctx.channel.id)
     display_name = target_str or (f"@{target_name}" if target_name else "bạn")
-    wait_msg = await ctx.send(
-        f"Đang thu thập dữ liệu gieo quẻ hôm nay của {display_name}..."
-    )
+    wait_msg = await ctx.send(f"Đang thu thập dữ liệu gieo quẻ hôm nay của {display_name}...")
     history_texts = []
     result_markers = (
         "QUẺ KINH DỊCH",
@@ -133,9 +124,7 @@ async def thongke_kinhdich(ctx, *, target_str: str = ""):
         refers_to_target = (target_name and target_name in message.content.lower()) or (
             mentioned_id and mentioned_id in message.content
         )
-        if refers_to_target and any(
-            marker in message.content for marker in result_markers
-        ):
+        if refers_to_target and any(marker in message.content for marker in result_markers):
             history_texts.append(message.content)
 
     if not history_texts:
@@ -157,7 +146,6 @@ async def thongke_kinhdich(ctx, *, target_str: str = ""):
     await _show_reading(
         ctx,
         wait_msg,
-        "📊 **THỐNG KÊ KINH DỊCH TRONG NGÀY**\n"
-        f"**Người xem:** {display_name}\n\n{reading}",
+        f"📊 **THỐNG KÊ KINH DỊCH TRONG NGÀY**\n**Người xem:** {display_name}\n\n{reading}",
     )
     log.info("[thongke_kinhdich] Hoàn thành cho %s", target_name)

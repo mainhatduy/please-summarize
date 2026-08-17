@@ -20,9 +20,7 @@ async def get_luck(ctx):
     async for message in ctx.channel.history(limit=500):
         if message.id == ctx.message.id or message.author.id != ctx.author.id:
             continue
-        if not message.content.strip() or message.content.strip().startswith(
-            bot.command_prefix
-        ):
+        if not message.content.strip() or message.content.strip().startswith(bot.command_prefix):
             continue
         user_messages.append(message.content.strip())
         if len(user_messages) >= 77:
@@ -39,10 +37,7 @@ async def get_luck(ctx):
 
     tier = result.tier
     await ctx.send(
-        f"`{ctx.author.name}`\n"
-        f"# **{tier.label}**\n"
-        f"## **{result.animal}**\n\n"
-        f"{result.fortune_msg}\n"
+        f"`{ctx.author.name}`\n# **{tier.label}**\n## **{result.animal}**\n\n{result.fortune_msg}\n"
     )
     log.info("[get_luck] %s rolled Tier %s", ctx.author, tier.name)
 
@@ -68,9 +63,7 @@ async def xinkeo(ctx, *, wish: str = ""):
         f'*"{wish}"*\n\n*Đang gieo quẻ xin keo...*'
     )
     loop = asyncio.get_event_loop()
-    reading = await loop.run_in_executor(
-        None, xinkeo_service.generate_luan_giai, wish, roll_result
-    )
+    reading = await loop.run_in_executor(None, xinkeo_service.generate_luan_giai, wish, roll_result)
     result_type = roll_result["result"]
     await wait_msg.edit(
         content=(

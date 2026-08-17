@@ -40,11 +40,7 @@ class SummarizeService:
                 model=self.model,
                 contents=prompt,
             )
-            result = (
-                response.text
-                if response.text
-                else "Không nhận được phản hồi từ mô hình."
-            )
+            result = response.text if response.text else "Không nhận được phản hồi từ mô hình."
             log.info(f"Gemini phản hồi thành công ({len(result)} ký tự).")
             return result
         except Exception as e:
@@ -53,9 +49,7 @@ class SummarizeService:
 
     def generate_drama_question(self, messages: list[str], target_name: str) -> str:
         if not messages:
-            log.warning(
-                "generate_drama_question() được gọi với danh sách tin nhắn rỗng."
-            )
+            log.warning("generate_drama_question() được gọi với danh sách tin nhắn rỗng.")
             return "Trời ơi, không có ai nói gì để mình lấy cớ thả thính cả..."
 
         prompt = build_drama_question_prompt(messages, target_name)

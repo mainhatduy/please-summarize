@@ -44,4 +44,3 @@ def test_generate_drama_question_strips_response() -> None:
     result = service.generate_drama_question(["An: Đói quá"], "An")
 
     assert result == "Đi ăn cùng mình không?"
-

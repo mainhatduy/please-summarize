@@ -63,16 +63,12 @@ async def tomtat(ctx, *args):
     skipped = skipped_bots = 0
     fetch_limit = 2000 if target_str else n + 1
     async for message in ctx.channel.history(limit=fetch_limit):
-        if message.id == ctx.message.id or not _matches_target(
-            message, target_id, target_name
-        ):
+        if message.id == ctx.message.id or not _matches_target(message, target_id, target_name):
             continue
         if message.author.bot or message.author.id == bot.user.id:
             skipped_bots += 1
             continue
-        if not message.content.strip() or message.content.strip().startswith(
-            bot.command_prefix
-        ):
+        if not message.content.strip() or message.content.strip().startswith(bot.command_prefix):
             skipped += 1
             continue
         messages.append(f"{message.author.name}: {message.content}")
@@ -126,9 +122,7 @@ async def tomtat_time(ctx, *args):
         if message.author.bot or message.author.id == bot.user.id:
             skipped_bots += 1
             continue
-        if not message.content.strip() or message.content.strip().startswith(
-            bot.command_prefix
-        ):
+        if not message.content.strip() or message.content.strip().startswith(bot.command_prefix):
             skipped += 1
             continue
         messages.append(f"{message.author.name}: {message.content}")

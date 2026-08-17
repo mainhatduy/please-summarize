@@ -2,6 +2,7 @@
 
 from discord.ext import commands
 
+from app.services.facebook import FacebookService
 from app.services.fortune import FortuneService
 from app.services.kinhdich import KinhDichService
 from app.services.music import MusicService
@@ -15,6 +16,7 @@ bot = commands.Bot(command_prefix=".", self_bot=True, help_command=None)
 
 summarize_service = SummarizeService()
 music_service = MusicService()
+facebook_service = FacebookService()
 fortune_service = FortuneService()
 taixiu_service = TaiXiuService()
 xinkeo_service = XinKeoService()

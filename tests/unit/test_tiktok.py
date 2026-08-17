@@ -11,4 +11,3 @@ def test_detect_tiktok_url_supports_common_hosts() -> None:
         "https://vm.tiktok.com/abc123/"
     )
     assert service.detect_tiktok_url("không có link") is None
-

@@ -27,9 +27,7 @@ async def handle_tiktok(message, url: str) -> None:
                 paths = result.image_paths[index : index + batch_size]
                 await message.channel.send(files=[discord.File(path) for path in paths])
                 if index + batch_size < len(result.image_paths):
-                    await asyncio.sleep(
-                        random.uniform(SEND_JITTER_MIN, SEND_JITTER_MAX)
-                    )
+                    await asyncio.sleep(random.uniform(SEND_JITTER_MIN, SEND_JITTER_MAX))
 
         await message.remove_reaction("⏳", bot.user)
         await message.add_reaction("✅")

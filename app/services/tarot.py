@@ -67,9 +67,7 @@ class TarotService:
                 f"Loaded tarot card database from {db_path}. Total cards: {len(self.cards_data)}"
             )
         except Exception as e:
-            log.error(
-                f"Failed to load tarot database from {db_path}: {e}", exc_info=True
-            )
+            log.error(f"Failed to load tarot database from {db_path}: {e}", exc_info=True)
             self.cards_data = {}
 
     def draw_cards(self) -> dict:
@@ -157,9 +155,7 @@ class TarotService:
         context_parts = ["### Card Details in this Reading:"]
         for idx, dc in enumerate(all_drawn):
             role = (
-                "Key Card (Lá chính - Trọng tâm)"
-                if idx == 0
-                else f"Supporting Card {idx} (Lá phụ)"
+                "Key Card (Lá chính - Trọng tâm)" if idx == 0 else f"Supporting Card {idx} (Lá phụ)"
             )
             card_info = self.cards_data.get(dc.card_key)
             if not card_info:
@@ -182,33 +178,21 @@ class TarotService:
             # Category-specific meaning
             category_meaning = ""
             if category == "love":
-                cat_key = (
-                    "reversal_love_meaning"
-                    if dc.is_reversed
-                    else "upright_love_meaning"
-                )
+                cat_key = "reversal_love_meaning" if dc.is_reversed else "upright_love_meaning"
                 category_meaning = metadata.get(cat_key, "")
             elif category == "career":
-                cat_key = (
-                    "reversal_career_meaning"
-                    if dc.is_reversed
-                    else "upright_career_meaning"
-                )
+                cat_key = "reversal_career_meaning" if dc.is_reversed else "upright_career_meaning"
                 category_meaning = metadata.get(cat_key, "")
             elif category == "finance":
                 cat_key = (
-                    "reversal_finances_meaning"
-                    if dc.is_reversed
-                    else "upright_finances_meaning"
+                    "reversal_finances_meaning" if dc.is_reversed else "upright_finances_meaning"
                 )
                 category_meaning = metadata.get(cat_key, "")
 
             card_str = f"- **{dc.name}** ({'Ngược' if dc.is_reversed else 'Xuôi'}) - [{role}]\n"
             card_str += f"  * Keywords: {keywords}\n"
             if general_meaning:
-                card_str += (
-                    f"  * General Meaning ({orientation}): {general_meaning.strip()}\n"
-                )
+                card_str += f"  * General Meaning ({orientation}): {general_meaning.strip()}\n"
             if category_meaning:
                 card_str += f"  * Category-specific Meaning ({category} - {orientation}): {category_meaning.strip()}\n"
 
@@ -252,16 +236,14 @@ class TarotService:
                             break
 
                 if found_combo:
-                    combo_str = f"- **{found_combo['name']}** ({found_combo['relationship'].upper()}):\n"
-                    combo_str += (
-                        f"  * Explanation: {found_combo['explanation'].strip()}\n"
+                    combo_str = (
+                        f"- **{found_combo['name']}** ({found_combo['relationship'].upper()}):\n"
                     )
+                    combo_str += f"  * Explanation: {found_combo['explanation'].strip()}\n"
                     if found_combo.get("contrasts"):
                         combo_str += "  * Contrasts:\n"
                         for contrast in found_combo["contrasts"]:
-                            combo_str += (
-                                f"    - {contrast['left']} vs {contrast['right']}\n"
-                            )
+                            combo_str += f"    - {contrast['left']} vs {contrast['right']}\n"
                     combo_parts.append(combo_str)
 
         if combo_parts:
