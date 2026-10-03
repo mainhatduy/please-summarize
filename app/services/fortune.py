@@ -1,8 +1,8 @@
 """
-Fortune Service – Random Vận May (Animal Fortune & Tier)
+Fortune Service – Random Vận May (Fortune Symbol & Tier)
 =========================================================
 Mỗi user được roll **1 lần/ngày** (reset 00:00 theo giờ server).
-Kết quả gồm: Tier (SSS→D), tên động vật bản mệnh, và lời bình do Gemini sinh
+Kết quả gồm: Tier (SSS→D), biểu tượng bản mệnh (động vật hoặc rau củ quả), và lời bình do Gemini sinh
 dựa trên 77 tin nhắn gần nhất của user trong kênh.
 """
 
@@ -28,7 +28,7 @@ class Tier:
     label: str  # Tên đầy đủ
     weight: int  # Tỷ lệ xuất hiện (tổng = 100)
     color: int  # Màu Discord Embed (hex int)
-    animals: list[str]  # Danh sách động vật kèm emoji
+    symbols: list[str]  # Danh sách biểu tượng bản mệnh (động vật, rau củ quả) kèm emoji
     fortune_msg: str  # Lời bình vận may
 
 
@@ -38,12 +38,15 @@ TIERS: list[Tier] = [
         label="⚡ Thần Thoại",
         weight=5,
         color=0xFFD700,  # Vàng kim
-        animals=[
+        symbols=[
             "🐉 Rồng Phương Đông",
             "🦄 Kỳ Lân Huyền Bí",
             "🦅 Đại Bàng Kim Cương",
             "🦚 Công Hoàng Gia",
             "🐳 Cá Voi Xanh Thần Thánh",
+            "🍑 Đào Tiên Bất Tử",
+            "🍎 Táo Vàng Thần Thoại",
+            "🍇 Nho Kim Cương",
         ],
         fortune_msg=(
             "**Nhân phẩm bùng nổ!** Hôm nay làm gì cũng thắng, bước ra đường là nhặt được tiền.\n"
@@ -55,12 +58,15 @@ TIERS: list[Tier] = [
         label="✨ Đại Cát",
         weight=10,
         color=0xFFA500,  # Cam vàng
-        animals=[
+        symbols=[
             "🦁 Sư Tử Hoàng Kim",
             "🐯 Hổ Bạch Tuyết",
             "🦋 Bướm Rồng May Mắn",
             "🦜 Vẹt Vàng Thông Thái",
             "🐬 Cá Heo Thần Tài",
+            "🍍 Dứa Hoàng Kim",
+            "🥭 Xoài Đại Cát",
+            "🍊 Cam Thần Tài",
         ],
         fortune_msg=(
             "**Ngày mới tràn đầy năng lượng!** Mọi việc tiến triển thuận lợi.\n"
@@ -72,13 +78,16 @@ TIERS: list[Tier] = [
         label="🌟 Cát Tường",
         weight=14,
         color=0x00CED1,  # Xanh ngọc
-        animals=[
+        symbols=[
             "🐱 Mèo Thần Tài",
             "🐶 Chó Lục Địa",
             "🦊 Cáo Chân Thành",
             "🦦 Rái Cá Vui Vẻ",
             "🦭 Hải Cẩu Tinh Nghịch",
             "🐼 Gấu Trúc Thong Thả",
+            "🍓 Dâu Tây May Mắn",
+            "🍒 Anh Đào Rực Rỡ",
+            "🍉 Dưa Hấu Ngọt Ngào",
         ],
         fortune_msg=(
             "**Một ngày khá mượt mà!** Chơi game ít gặp tạ, code ít bug hơn thường ngày.\n"
@@ -90,12 +99,15 @@ TIERS: list[Tier] = [
         label="☁️ Bình An",
         weight=50,
         color=0x7289DA,  # Discord blurple
-        animals=[
+        symbols=[
             "🐢 Cụ Rùa Thảnh Thơi",
             "🦥 Lười Biếng Đạt Đạo",
             "🦆 Vịt Vui Vẻ",
             "🐑 Cừu Non Ngơ Ngác",
             "🐇 Thỏ Trắng Bình Yên",
+            "🍐 Lê Bình Yên",
+            "🥥 Dừa Thong Dong",
+            "🍠 Khoai Lang An Nhiên",
         ],
         fortune_msg=(
             "**Cuộc sống êm đềm, không tốt không xấu.**\n"
@@ -107,12 +119,16 @@ TIERS: list[Tier] = [
         label="⚠️ Hung",
         weight=20,
         color=0xE67E22,  # Cam đỏ
-        animals=[
+        symbols=[
             "🦙 Lạc Đà Vô Tri",
             "🦟 Muỗi Phiền Toái",
             "🐒 Khỉ Tấu Hài",
             "🕊️ Bồ Câu Bay Qua Đầu",
             "🐸 Ếch Dự Báo Mưa",
+            "🍋 Chanh Chua Chát",
+            "🥝 Kiwi Khó Ở",
+            "🌶️ Ớt Cay Xé Lòng",
+            "🍌 Chuối Thảnh Thơi",
         ],
         fortune_msg=(
             "**Bước xuống giường bằng chân trái rồi...**\n"
@@ -124,11 +140,14 @@ TIERS: list[Tier] = [
         label="💀 Đại Hung",
         weight=1,
         color=0x2F3136,  # Xám xịt đen
-        animals=[
+        symbols=[
             "🪳 Gián Bay Ban Đêm",
             "🐷 Heo Đất Rỗng Ruột",
             "🦈 Cá Mập Mắc Cạn",
             "🐛 Sâu Đen Bất Hạnh",
+            "🍈 Dưa Lưới Úng Ruột",
+            "🥑 Bơ Bị Bỏ Rơi",
+            "🫐 Việt Quất Dập Nát",
         ],
         fortune_msg=(
             '**"Chúa tể hẩm hiu" đã giáng thế!** 💀\n'
@@ -173,7 +192,7 @@ def save_history(history: dict[str, str]):
 @dataclass
 class FortuneResult:
     tier: Tier
-    animal: str
+    symbol: str
     fortune_msg: str = ""  # Lời bình do Gemini sinh
     already_rolled: bool = False
 
@@ -185,17 +204,17 @@ class FortuneService:
         self.client = genai.Client(api_key=Config.GEMINI_API_KEY)
         self.model = Config.MODEL_NAME
 
-    def generate_fortune_msg(self, tier: Tier, animal: str, messages: list[str]) -> str:
+    def generate_fortune_msg(self, tier: Tier, symbol: str, messages: list[str]) -> str:
         """Gọi Gemini sinh lời bình vận may dựa trên tin nhắn thực của user."""
         if not messages:
             return tier.fortune_msg  # fallback về text cứng nếu không có tin nhắn
 
         chat_log = "\n".join(messages)
-        # Tách bỏ emoji ở đầu tên động vật (ví dụ "🐉 Rồng Phương Đông" -> "Rồng Phương Đông")
-        animal_name = " ".join(animal.split()[1:]) if len(animal.split()) > 1 else animal
+        # Tách bỏ emoji ở đầu biểu tượng (ví dụ "🍑 Đào Tiên Bất Tử" -> "Đào Tiên Bất Tử")
+        symbol_name = " ".join(symbol.split()[1:]) if len(symbol.split()) > 1 else symbol
         prompt = (
             f"Bạn là nhà tiên tri hài hước trên Discord.\n"
-            f"User vừa roll được Tier **{tier.name}** ({tier.label.strip()}) – {animal_name} bản mệnh.\n"
+            f"User vừa roll được Tier **{tier.name}** ({tier.label.strip()}) – {symbol_name} bản mệnh.\n"
             f"Dựa vào các tin nhắn gần đây của user dưới đây, hãy viết 2-3 câu luận giải vận may HÔM NAY cho họ.\n"
             f"Phong cách: hài hước, dí dỏm, có thể khen hoặc chọc nhẹ. Viết bằng tiếng Việt. Không cần chào hỏi.\n"
             f"Tier {tier.name} có nghĩa: {tier.fortune_msg.split(chr(10))[0]}\n\n"
@@ -229,19 +248,19 @@ class FortuneService:
             try:
                 last_roll_dt = datetime.fromisoformat(history[user_key])
                 if last_roll_dt.date() == today:
-                    return FortuneResult(tier=None, animal="", already_rolled=True)  # type: ignore[arg-type]
+                    return FortuneResult(tier=None, symbol="", already_rolled=True)  # type: ignore[arg-type]
             except Exception as e:
                 log.error(f"[fortune] Lỗi khi parse thời gian roll cũ của user {user_id}: {e}")
 
         secure_random = random.SystemRandom()
         tier: Tier = secure_random.choices(TIERS, weights=_TIER_WEIGHTS, k=1)[0]
-        animal: str = secure_random.choice(tier.animals)
-        fortune_msg = self.generate_fortune_msg(tier, animal, messages or [])
+        symbol: str = secure_random.choice(tier.symbols)
+        fortune_msg = self.generate_fortune_msg(tier, symbol, messages or [])
 
         history[user_key] = datetime.now().isoformat()
         save_history(history)
         return FortuneResult(
-            tier=tier, animal=animal, fortune_msg=fortune_msg, already_rolled=False
+            tier=tier, symbol=symbol, fortune_msg=fortune_msg, already_rolled=False
         )
 
     def get_embed(self, result: FortuneResult, author_name: str) -> dict:
@@ -255,7 +274,7 @@ class FortuneService:
             "title": f"🎲 Vận May Hôm Nay Của {author_name}",
             "description": (
                 f"**Tier:** {tier.label}\n"
-                f"**Động vật bản mệnh:** {result.animal}\n\n"
+                f"**Biểu tượng bản mệnh:** {result.symbol}\n\n"
                 f"{result.fortune_msg}"
             ),
             "color": tier.color,
