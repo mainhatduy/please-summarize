@@ -37,7 +37,7 @@ async def get_luck(ctx):
 
     tier = result.tier
     await ctx.send(
-        f"`{ctx.author.name}`\n# **{tier.label}**\n## **{result.animal}**\n\n{result.fortune_msg}\n"
+        f"`{ctx.author.name}`\n# **{tier.label}**\n## **{result.symbol}**\n\n{result.fortune_msg}\n"
     )
     log.info("[get_luck] %s rolled Tier %s", ctx.author, tier.name)
 

@@ -34,7 +34,7 @@ def test_fortune_feature_calls_gemini() -> None:
     tier = TIERS[0]
 
     result = service.generate_fortune_msg(
-        tier, tier.animals[0], ["Hôm nay mình vừa hoàn thành một dự án khó."]
+        tier, tier.symbols[0], ["Hôm nay mình vừa hoàn thành một dự án khó."]
     )
 
     assert result.strip()
