@@ -34,9 +34,9 @@ class TikTokResult:
 class TikTokService:
     """Xử lý download video/ảnh từ link TikTok qua TikWM API."""
 
-    # Regex bắt các dạng URL TikTok phổ biến
+    # Regex bắt các dạng URL TikTok phổ biến (bao gồm domain ngắn tt.site)
     TIKTOK_URL_PATTERN = re.compile(
-        r"https?://(?:(?:www|vm|vt)\.)?tiktok\.com/\S+",
+        r"https?://(?:(?:(?:www|vm|vt|m)\.)?tiktok\.com|(?:www\.)?tt\.site)/\S+",
         re.IGNORECASE,
     )
 
@@ -61,10 +61,39 @@ class TikTokService:
     def detect_tiktok_url(self, text: str) -> str | None:
         """Trả về URL TikTok đầu tiên tìm thấy trong text, hoặc None."""
         match = self.TIKTOK_URL_PATTERN.search(text)
-        return match.group(0) if match else None
+        if match is None:
+            return None
+        cleaned = match.group(0).rstrip(".,;:!?)]}>\"'")
+        return cleaned or None
+
+    async def _resolve_url(self, url: str) -> str:
+        """Resolve redirect cho các shortlink (như tt.site)."""
+        try:
+            async with httpx.AsyncClient(
+                headers=self._BROWSER_HEADERS,
+                follow_redirects=True,
+                timeout=10.0,
+            ) as client:
+                resp = await client.head(url)
+                if resp.status_code < 400 and str(resp.url) != url:
+                    resolved = str(resp.url)
+                    log.info(f"[tiktok] Resolved URL: {url} -> {resolved}")
+                    return resolved
+                if resp.status_code >= 400:
+                    async with client.stream("GET", url) as stream_resp:
+                        if stream_resp.status_code < 400 and str(stream_resp.url) != url:
+                            resolved = str(stream_resp.url)
+                            log.info(f"[tiktok] Resolved URL: {url} -> {resolved}")
+                            return resolved
+        except Exception as e:
+            log.warning(f"[tiktok] Failed to resolve URL {url}: {e}")
+        return url
 
     async def download(self, url: str) -> TikTokResult:
         """Download video hoặc ảnh slideshow từ TikTok URL qua TikWM API."""
+        if "tt.site" in url.lower():
+            url = await self._resolve_url(url)
+
         log.info(f"[tiktok] Fetching TikWM API for: {url}")
 
         try:
